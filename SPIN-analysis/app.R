@@ -1,3 +1,5 @@
+# Load necessary packages
+
 library(shiny)
 library(shinythemes)
 library(dplyr)
@@ -12,6 +14,8 @@ library(DT)
 library(R.utils)
 library(colourpicker)
 library(writexl)
+
+## 1. Create graphical user interface definition of the shiny app
 
 ui<-dashboardPage(
   dashboardHeader(title=span(tagList(icon("database"),"SPIN"))),
@@ -41,11 +45,11 @@ ui<-dashboardPage(
                                                  "INNER JOIN UseT AS u",
                                                  br(),
                                                  "ON u.PID=sp.PID;")),
-                               tags$li("You will get a new data table. Save this query under a appropriate name. You need to export this table now. It is important that you export this file as 
+                               tags$li("You will get a new data table. Save this query under a appropriate name. You need to export this table. It is important that you export this file as 
                                  a .txt. When you get in the export menu, it is crucial that you do not maintain the format, otherwise a lot of data will 
                                  be lost"),
                                tags$li("You have to convert the .txt to a .txt.gz since the .txt format is too big to upload. You can do this for example with",tags$a(href="https://www.7-zip.de/","7-Zip")))),
-                           p(h2("Candidate-List"),
+                           p(h2("Candidate-list"),
                              tags$ol(
                                tags$li("Download the",strong("English"),"version of the current Candidate-list as a .xlsx on the",
                                        tags$a(href="https://echa.europa.eu/candidate-list-table","official ECHA website")))),
@@ -147,7 +151,9 @@ ui<-dashboardPage(
                                             radioButtons(inputId = "inter_datatype",label = strong("File Type"),choices = c("csv","xlsx")),
                                             downloadButton("downloadintertable","Download Table"))),
                        box(width=7,column(12,p("The substances you see in the table are the substances which are classified as intermediates. These get not plotted in the following plot. You can add Cas-numbers."),
-                                          dataTableOutput(outputId = "inter_tab")))),
+                                          dataTableOutput(outputId = "inter_tab"))),
+                       box(width=7,column(12,p("Test"),
+                                          tableOutput(outputId = "debug")))),
               fluidRow(box(title="Controls",width = 4,
                            column(9,selectInput(inputId = "inter_countries",label = strong("Country"), choices = c("SE","DK","NO","FI"),
                                                 selected = "SE"),
@@ -173,11 +179,18 @@ ui<-dashboardPage(
                        box(width = 9,column(12,dataTableOutput(outputId = "table"))))))))
 
 
+## 2. Create the function that will be executed when the shiny app is used
+
 server<-function(input, output, session) {
+  
+  # Increase the maximum upload size
   options(shiny.maxRequestSize = 30*1024^2)
+  
+  # Set the theme for the plots that can be displayed and downloaded
   theme_set(theme_light())
   
   
+  # Clean the input data from the SPIN database for further cleaning and analysis
   spin_data<-reactive({
     input_file1<-input$spin
     if(is.null(input_file1)){
@@ -196,6 +209,7 @@ server<-function(input, output, session) {
              country=as.factor(country))
   })
   
+  # Check the time period of the data from the SPIN database and update the choices to filter the years
   observe({
     input_file1<-input$spin
     if(is.null(input_file1)){
@@ -446,19 +460,19 @@ server<-function(input, output, session) {
       summarize(all=sum(amount)) %>%
       filter(country==input$normal_country & svhc=="SVHC") 
     
-    g<-cbind(normal,svhc) %>%
-      filter(year>=input$normal_year) %>%
-      select(-country1,-year1,-svhc1,svhc_amount=all1) %>%
-      mutate(ratio=svhc_amount/all)
+    g <- normal %>%
+      add_column(svhc_amount = pull(select(svhc,all),all)) %>%
+      filter(year>=input$normal_year)
     
     g %>%
       mutate(verg_normal=(all-g$all[1])/g$all[1],
              verg_svhc=(svhc_amount-g$svhc_amount[1])/g$svhc_amount[1])
   })
   
+  
   output$normal_rel_plot<-renderPlot({
     normal_rel_data() %>%
-      select(-all,-svhc,-svhc_amount,-ratio,SVHC=verg_svhc,Normal=verg_normal) %>%
+      select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
       gather(Type,value,-country,-year) %>%
       ggplot(aes(year,value,fill=Type,width=0.4))+
       geom_histogram(stat="identity",position = "dodge")+
@@ -476,7 +490,7 @@ server<-function(input, output, session) {
     content = function(file){
       write_xlsx(
         normal_rel_data() %>%
-          select(-all,-svhc,-svhc_amount,-ratio,SVHC=verg_svhc,Normal=verg_normal) %>%
+          select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
           gather(Type,value,-country,-year) %>%
           rename(type=Type,effective_change=value),file)
     }
@@ -488,7 +502,7 @@ server<-function(input, output, session) {
     },
     content = function(file){
       normal_plot<-normal_rel_data() %>%
-        select(-all,-svhc,-svhc_amount,-ratio,SVHC=verg_svhc,Normal=verg_normal) %>%
+        select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
         gather(Type,value,-country,-year) %>%
         ggplot(aes(year,value,fill=Type,width=0.4))+
         geom_histogram(stat="identity",position = "dodge")+
@@ -667,10 +681,14 @@ server<-function(input, output, session) {
   })
   
   output$debug<-renderTable({
+    
+    print(ncol(time_data()))
+    str(time_data(),max.level = 2)
+    
   })
   
   output$test<-renderText({
-    out<-try(time_data()[,1],silent = T)
+    out<-try(ncol(time_data()),silent = T)
     if (length(out)>1){
       "Succesful Upload of all files"
     } else {
