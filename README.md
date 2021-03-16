@@ -1,6 +1,6 @@
-# Shiny-Apps
+# Shiny apps
 
-In this repository there are Shiny-Apps for different purposes. For further information on the different apps read the README-file in the particular directory.
+In this repository there are Shiny apps for different purposes. For further information on the different apps read the README-file in the particular directory.
 
 To run the examples locally, you can install the **shiny** package in R, and
 use the function `runGitHub()`. For example, to run the example `SPIN-analysis`:
