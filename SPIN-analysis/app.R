@@ -99,7 +99,7 @@ ui<-dashboardPage(
                                                                radioButtons(inputId = "normal_rel_datatype",label = strong("File Type"),
                                                                             choices = c("csv","xlsx")),
                                                                downloadButton("downloadnormal_rel_table","Download Table"))),
-                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes per annum
+                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes
                                                  and per type of chemicals are displayed."),br(),dataTableOutput(outputId = "normal_table")))),
               fluidRow(column(12,h2("Completeness of The SPIN Database"))),
               fluidRow(box(width = 4,column(12,p("Here you can see the fraction of single SVHC entries from the 
@@ -182,7 +182,8 @@ ui<-dashboardPage(
                                                                radioButtons(inputId = "carc_table_datatype",label = strong("File Type"),
                                                                             choices = c("csv","xlsx")),
                                                                downloadButton("downloadcarctable","Download Table"))),
-                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes per annum and per type of problematic chemicals are displayed."),br(),
+                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes
+                                                 and per type of problematic chemicals are displayed."),br(),
                                             dataTableOutput(outputId = "carctable"))))),
       tabItem(tabName = "intermediate",
               fluidRow(box(width = 5,background = "light-blue",column(12,offset=1,h2(strong("Trend without Intermediates")))),
@@ -664,7 +665,7 @@ server<-function(input, output, session) {
     "Succesful upload of all files"
   })
   
-  # Table displaying five biggest differences to a reference year in tonnes per annum and per type of chemicals
+  # Table displaying five biggest differences to a reference year in tonnes and per type of chemicals
   output$normal_table<-renderDataTable({
     shiny::validate(
       need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
@@ -714,7 +715,7 @@ server<-function(input, output, session) {
     }
   })
   
-  # Table displaying five biggest differences to a reference year in tonnes per annum and per type of problematic chemicals
+  # Table displaying five biggest differences to a reference year in tonnes and per type of problematic chemicals
   output$carctable<-renderDataTable({
     shiny::validate(
       need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
@@ -1290,7 +1291,7 @@ server<-function(input, output, session) {
     }
   )
   
-  # Data of table displaying five biggest differences to a reference year in tonnes per annum and per type of chemicals
+  # Data of table displaying five biggest differences to a reference year in tonnes and per type of chemicals
   output$downloadnormal_rel_table<-downloadHandler(
     filename = function(){
       if (input$normal_rel_datatype=="csv"){
@@ -1406,7 +1407,7 @@ server<-function(input, output, session) {
     }
   )
   
-  # Data of the table displaying five biggest differences to a reference year in tonnes per annum and per type of problematic chemicals
+  # Data of the table displaying five biggest differences to a reference year in tonnes and per type of problematic chemicals
   output$downloadcarctable<-downloadHandler(
     filename = function(){
       if (input$carc_table_datatype=="csv"){
