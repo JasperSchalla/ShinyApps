@@ -24,8 +24,10 @@ Here are some examples for possible plots which can be generated:
 </p>
 <p float="left">
 <img src="/SPIN-analysis/example_plots/spin_prob_trend.png" width="500" height="400"/>
-<img src="/SPIN-analysis/example_plots/spin_rel_prob_trend.png" width="500" height="400"/>
+<img src="/SPIN-analysis/example_plots/spin_rel_pob_trend.png" width="500" height="400"/>
 </p>
+<p float="center">
 <img src="/SPIN-analysis/example_plots/spin_timeline.png" width="800" height="450"/>
+</p>
 
 
