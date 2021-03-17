@@ -1,5 +1,4 @@
 # Load necessary packages
-# Test
 
 library(shiny)
 library(shinythemes)
@@ -16,7 +15,7 @@ library(R.utils)
 library(colourpicker)
 library(writexl)
 
-## 1. Create graphical user interface definition of the shiny app
+### 1. Create graphical user interface definition of the shiny app
 
 ui<-dashboardPage(
   dashboardHeader(title=span(tagList(icon("database"),"SPIN"))),
@@ -25,8 +24,8 @@ ui<-dashboardPage(
       menuItem("Upload Data",tabName = "data",icon=icon("upload")),
       menuItem("SVHC and Overall Trend",tabName = "trend",icon = icon("chart-bar")),
       menuItem("Trend without Intermediates",tabName = "intermediate",icon = icon("chart-bar")),
-      menuItem("Problematic Chemical Trend",tabName = "carco",icon=icon("exclamation")),
-      menuItem("Raw Data",tabName = "frame",icon = icon("table")))),
+      menuItem("Problematic Chemical Trend",tabName = "carco",icon=icon("chart-bar")),
+      menuItem("Complete Data",tabName = "frame",icon = icon("table")))),
   dashboardBody(
     tabItems(
       tabItem(tabName="data",
@@ -65,7 +64,8 @@ ui<-dashboardPage(
                            fileInput(inputId = "authorisation",label = "Authorisation-list",accept = ".xlsx"))),
               fluidRow(box(title = "Upload Status",width = 4,column(9,tableOutput(outputId = "test"))))),
       tabItem(tabName="trend",
-              fluidRow(box(width=6,background = "light-blue",column(12,offset = 1,h2(strong("Trend of All, Single and SVHC Substances"))))),
+              fluidRow(box(width=4,background = "light-blue",column(12,offset = 1,h2(strong("SVHC and Overall Trend")))),
+                       column(12,h2("Trend of All, Single and SVHC Substances"))),
               fluidRow(box(title="Controls",width = 4,
                            column(9,selectInput(inputId = "countries",label = strong("Country"), choices = c("SE","DK","NO","FI"),
                                                 selected = "SE"),
@@ -113,7 +113,8 @@ ui<-dashboardPage(
                            column(12,br(),helpText("The data from SPIN is just given as years. For this plot the data for every year was plotted at the first of January (DOI = Date of inclusion, LAD = Latest application date, SD = Sunset Date)."))),
                        box(width = 7,column(12,plotOutput(outputId = "timeline"))))),
       tabItem(tabName = "carco",
-              fluidRow(box(width = 6,background = "light-blue",column(12,offset = 1,h2(strong("Trend of Problematic Chemicals"))))),
+              fluidRow(box(width = 5,background = "light-blue",column(12,offset = 1,h2(strong("Problematic Chemical Trend")))),
+                       column(12,h2("Trend of Problematic Chemicals"))),
               fluidRow(box(width = 4,column(9,textInput(inputId = "add_cas",label = strong("Add Cas-number"),value = "50-00-0",placeholder = "50-00-0"),
                                             selectInput(inputId = "add_type",label = strong("Add to which type"),choices =c("carcinogenic","equivalent concern","mutagenic","PBT/vPVB","toxic for reproduction")),
                                             actionButton(inputId = "add_action","Add"),
@@ -142,9 +143,11 @@ ui<-dashboardPage(
                                                                selectInput(inputId = "carc_table_type",label = strong("Type"),choices = c("All","carcinogenic","equivalent concern","mutagenic","PBT/vPVB","toxic for reproduction")),
                                                                radioButtons(inputId = "carc_table_datatype",label = strong("File Type"),choices = c("csv","xlsx")),
                                                                downloadButton("downloadcarctable","Download Table"))),
-                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes per annum and per type of chemicals are displayed."),br(),dataTableOutput(outputId = "carctable"))))),
+                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes per annum and per type of problematic chemicals are displayed."),br(),
+                                            dataTableOutput(outputId = "carctable"))))),
       tabItem(tabName = "intermediate",
-              fluidRow(box(width = 6,background = "light-blue",column(12,offset=1,h2(strong("Trend of SVHCs without Intermediates"))))),
+              fluidRow(box(width = 5,background = "light-blue",column(12,offset=1,h2(strong("Trend without Intermediates")))),
+                       column(12,h2("Trend of SVHCs without Intermediates"))),
               fluidRow(box(width = 4,column(9,textInput(inputId = "inter_cas",label = strong("Add Cas-number"),value = "50-00-0",placeholder = "50-00-0"),
                                             actionButton(inputId = "inter_action","Add"),
                                             actionButton(inputId = "inter_remove","Remove"),
@@ -165,7 +168,7 @@ ui<-dashboardPage(
                            column(5,downloadButton("downloadinterplot_back","Download Data"))),
                        box(width = 7,column(plotOutput(outputId = "interplot"),width = 12)))),
       tabItem(tabName = "frame",
-              fluidRow(box(width = 4,background = "light-blue",column(12,offset = 3,h2(strong("Raw Data"))))),
+              fluidRow(box(width = 4,background = "light-blue",column(12,offset = 3,h2(strong("Complete Data"))))),
               fluidRow(column(12,p())),
               fluidRow(box(title = "Controls",width = 3,column(9,selectInput(inputId = "dataframe",label = strong("Select Data Frame"),choices = c("Raw","Total")),
                                                                selectInput(inputId = "country_frame",label = strong("Country"),choices = c("SE","NO","FI","DK","Nordic")),
@@ -180,9 +183,11 @@ ui<-dashboardPage(
                        box(width = 9,column(12,dataTableOutput(outputId = "table"))))))))
 
 
-## 2. Create the function that will be executed when the shiny app is used
+### 2. Create the function that will be executed when the shiny app is used
 
 server<-function(input, output, session) {
+  
+  ## 2.1 Select options
   
   # Increase the maximum upload size
   options(shiny.maxRequestSize = 30*1024^2)
@@ -190,25 +195,7 @@ server<-function(input, output, session) {
   # Set the theme for the plots that can be displayed and downloaded
   theme_set(theme_light())
   
-  
-  # Clean the input data from the SPIN database for further cleaning and analysis
-  spin_data<-reactive({
-    input_file1<-input$spin
-    if(is.null(input_file1)){
-      return("Error")
-    }
-    abfrage2<-fread(input_file1$datapath,header = F)
-    colnames(abfrage2)<-c("PID","cas_no","nametype","name","PID2","country","year","exist","confident",
-                          "consumer","number","amount","timestamp")
-    abfrage2$amount<-gsub(",",".",abfrage2$amount)
-    abfrage2$amount<-as.numeric(abfrage2$amount)
-    abfrage2 %>%
-      select(-nametype,-PID2,-exist,-confident,-consumer,-number,-timestamp) %>%
-      mutate(cas_no=as.character(cas_no),
-             name=as.character(name),
-             amount=amount/10,
-             country=as.factor(country))
-  })
+  ## 2.2 Make lists based on already available data reactive
   
   # Check the time period of the data from the SPIN database and update the choices to filter the years
   observe({
@@ -244,29 +231,27 @@ server<-function(input, output, session) {
   })
   
   
+  # Supplement data which lists problematic chemicals and divides them into different categories.
+  # Chemicals can be added to and removed from the list
   init_carc<-read_xlsx("./data/carcinogenic.xlsx") %>%
     separate_rows(cas_no,sep = ", ") %>%
     select(name=Name,type,cas_no)
   
-  
+  # Make the list reactive
   carc<-reactiveValues(data=init_carc)
   
+  # Supplement data which lists SVHCs which can be considered intermediates.
+  # Chemicals can be added to and removed from the list
   init_inter<-data.frame(cas_no=c("1317-36-8","107-06-2","75-56-9","50-32-8","79-06-1","107-15-3"),name=c("Lead monoxide (lead oxide)","1,2-dichloroethane","Methyloxirane (Propylene oxide)","Benzo[def]chrysene (Benzo[a]pyrene)","Acrylamide","Ethylenediamine")) %>%
     mutate(cas_no=as.character(cas_no),
            name=as.character(name))
   
+  # Make the list reactive
   inter<-reactiveValues(data=init_inter)
   
-  join_data<-reactive({
-    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
-      distinct(cas_no,year,country,.keep_all = T) %>%
-      inner_join(candidate_data(),by="cas_no") %>%
-      distinct(cas_no,year,country,.keep_all = T) %>%
-      arrange(country,year)
-  })
-  
+  # Remove chemicals from the list with problematic chemicals
   observeEvent(input$add_remove,{
-    if (length(spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+    if (length(spin_data() %>%
                distinct(cas_no,year,country,.keep_all = T) %>%
                filter(cas_no==input$add_cas) %>%
                pull(name))==0){
@@ -276,6 +261,7 @@ server<-function(input, output, session) {
     }
   })
   
+  # Add chemicals to the list with problematic chemicals
   observeEvent(input$add_action,{
     if (length(spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
                distinct(cas_no,year,country,.keep_all = T) %>%
@@ -291,83 +277,59 @@ server<-function(input, output, session) {
     }
   })
   
-  output$downloadcarcinogenictable<-downloadHandler(
-    filename = function(){
-      if (input$add_datatype=="xlsx"){
-        paste("problematic_chemicals","xlsx",sep = ".")
-      } else if (input$add_datatype=="csv"){
-        paste("problematic_chemicals","csv",sep = ".")
-      }
-    },
-    content = function(file){
-      if (input$add_datatype=="xlsx"){
-        write_xlsx(carc$data,file)
-      } else if (input$add_datatype=="csv"){
-        write.csv(carc$data,file)
-      }
-    }
-  )
-  
-  
+  # Remove chemicals from the list with SVHC which can be considered as intermediates
   observeEvent(input$inter_remove,{
     inter$data<-inter$data %>%
       filter(cas_no!=input$inter_cas)
   })
   
+  # Add chemicals to the list with SVHC which can be considered as intermediates
   observeEvent(input$inter_action,{
-    if (length(spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+    if (length(spin_data() %>% 
                distinct(cas_no,year,country,.keep_all = T) %>%
                filter(cas_no==input$inter_cas) %>%
                pull(name))==0){
       print(glue::glue("There is no Cas-number: {input$inter_cas}"))
     } else {
       inter$data<-inter$data %>%
-        add_row(name=unique(spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+        add_row(name=unique(spin_data() %>%
                               distinct(cas_no,year,country,.keep_all = T) %>%
                               filter(cas_no==input$inter_cas) %>%
                               pull(name)),cas_no=input$inter_cas)
     }
   })
   
-  output$downloadintertable<-downloadHandler(
-    filename = function(){
-      if (input$inter_datatype=="xlsx"){
-        paste("intermediates","xlsx",sep = ".")
-      } else if (input$inter_datatype=="csv"){
-        paste("intermediates","csv",sep = ".")
-      }
-    },
-    content = function(file){
-      if (input$inter_datatype=="xlsx"){
-        write_xlsx(inter$data,file)
-      } else if (input$inter_datatype=="csv"){
-        write.csv(inter$data,file)
-      }
-    }
-  )
+  ## 2.3 Clean and analyse input data
   
-  output$inter_tab<-renderDataTable({
-    shiny::validate(
-      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table is shown")
-    )
-    if (input$inter_action==0 & input$inter_remove==0){
-      init_inter
-    } else {
-      inter$data
+  # Clean the input data from the SPIN database for further cleaning and analysis
+  spin_data<-reactive({
+    input_file1<-input$spin
+    if(is.null(input_file1)){
+      return("Error")
     }
+    abfrage2<-fread(input_file1$datapath,header = F)
+    colnames(abfrage2)<-c("PID","cas_no","nametype","name","PID2","country","year","exist","confident",
+                          "consumer","number","amount","timestamp")
+    abfrage2$amount<-gsub(",",".",abfrage2$amount)
+    abfrage2$amount<-as.numeric(abfrage2$amount)
+    abfrage2 %>%
+      select(-nametype,-PID2,-exist,-confident,-consumer,-number,-timestamp) %>%
+      mutate(cas_no=as.character(cas_no),
+             name=as.character(name),
+             amount=amount/10,
+             country=as.factor(country))
   })
   
-  output$carc_tab<-renderDataTable({
-    shiny::validate(
-      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table is shown")
-    )
-    if (input$add_action==0 & input$add_remove==0){
-      init_carc
-    } else {
-      carc$data
-    }
+  # Join SPIN data and data from candidate-list and clean it
+  join_data<-reactive({
+    spin_data() %>%
+      distinct(cas_no,year,country,.keep_all = T) %>%
+      inner_join(candidate_data(),by="cas_no") %>%
+      distinct(cas_no,year,country,.keep_all = T) %>%
+      arrange(country,year)
   })
   
+  # Differentiate chemicals in SPIN database in normal chemicals and SVHCs
   normal_table_data<-reactive({
     test<-(spin_data() %>%
              distinct(year,country,cas_no,.keep_all = T))$cas_no %in% candidate_data()$cas_no
@@ -378,80 +340,7 @@ server<-function(input, output, session) {
     all_combined
   })
   
-  output$normal_table<-renderDataTable({
-    shiny::validate(
-      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
-    )
-    normal_table_data() %>%
-      group_by(country,year,svhc,cas_no) %>%
-      summarize(total=sum(amount)) %>%
-      filter(country==input$normal_rel_country) %>%
-      inner_join(normal_table_data() %>%
-                   group_by(country,year,svhc,cas_no) %>%
-                   summarize(total=sum(amount)) %>%
-                   filter(country==input$normal_rel_country) %>%
-                   filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
-      select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
-      mutate(difference=total-comp_total) %>%
-      filter(year>input$normal_rel_year) %>%
-      arrange(desc(abs(difference))) %>%
-      slice(1:5) %>%
-      ungroup() %>%
-      left_join(normal_table_data() %>%
-                  distinct(name,cas_no) %>%
-                  select(name,cas_no),by="cas_no") %>%
-      select(year,country,type=svhc,cas_no,name,difference)
-  })
-  
-  output$downloadnormal_rel_table<-downloadHandler(
-    filename = function(){
-      if (input$normal_rel_datatype=="csv"){
-        paste("spin_all_rel","csv",sep = ".")
-      } else if (input$normal_rel_datatype=="xlsx"){
-        paste("spin_all_rel","xlsx",sep = ".")
-      }
-    },
-    content = function(file){
-      if (input$normal_rel_datatype=="csv"){
-        write.csv(
-          normal_table_data() %>%
-            group_by(country,year,svhc,cas_no) %>%
-            summarize(total=sum(amount)) %>%
-            filter(country==input$normal_rel_country) %>%
-            inner_join(normal_table_data() %>%
-                         group_by(country,year,svhc,cas_no) %>%
-                         summarize(total=sum(amount)) %>%
-                         filter(country==input$normal_rel_country) %>%
-                         filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
-            select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
-            mutate(difference=total-comp_total) %>%
-            filter(year>input$normal_rel_year) %>%
-            arrange(desc(abs(difference))) %>%
-            slice(1:5) %>%
-            ungroup() %>%
-            rename(current_tonnes=total,reference_tonnes=comp_total),file)
-      } else if (input$normal_rel_datatype=="xlsx"){
-        write_xlsx(
-          normal_table_data() %>%
-            group_by(country,year,svhc,cas_no) %>%
-            summarize(total=sum(amount)) %>%
-            filter(country==input$normal_rel_country) %>%
-            inner_join(normal_table_data() %>%
-                         group_by(country,year,svhc,cas_no) %>%
-                         summarize(total=sum(amount)) %>%
-                         filter(country==input$normal_rel_country) %>%
-                         filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
-            select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
-            mutate(difference=total-comp_total) %>%
-            filter(year>input$normal_rel_year) %>%
-            arrange(desc(abs(difference))) %>%
-            slice(1:5) %>%
-            ungroup() %>%
-            rename(current_tonnes=total,reference_tonnes=comp_total),file)
-      }
-    }
-  )
-  
+  # Analyse the realtive production amounts of normal and SVHC chemicals
   normal_rel_data<-reactive({
     test<-(spin_data() %>%
              distinct(year,country,cas_no,.keep_all = T))$cas_no %in% candidate_data()$cas_no
@@ -479,55 +368,7 @@ server<-function(input, output, session) {
              verg_svhc=(svhc_amount-g$svhc_amount[1])/g$svhc_amount[1])
   })
   
-  
-  output$normal_rel_plot<-renderPlot({
-    shiny::validate(
-      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
-    )
-    normal_rel_data() %>%
-      select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
-      gather(Type,value,-country,-year) %>%
-      ggplot(aes(year,value,fill=Type,width=0.4))+
-      geom_histogram(stat="identity",position = "dodge")+
-      scale_y_continuous("Effective Change",labels = scales::percent_format())+
-      scale_x_continuous(breaks = seq(min(normal_rel_data()$year),max(normal_rel_data()$year)))+
-      labs(x="",title = glue::glue("Trend of SVHCs and Normal chemicals in {input$normal_country} relative to {input$normal_year}"))+
-      expand_limits(y=c(0,0.75))+
-      theme(axis.text.x = element_text(angle=45,hjust = 1))
-  })
-  
-  output$downloadnormalrel_back<-downloadHandler(
-    filename = function(){
-      paste("spin_rel_trend_data","xlsx",sep = ".")
-    },
-    content = function(file){
-      write_xlsx(
-        normal_rel_data() %>%
-          select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
-          gather(Type,value,-country,-year) %>%
-          rename(type=Type,effective_change=value),file)
-    }
-  )
-  
-  output$downloadnormalrel<-downloadHandler(
-    filename = function(){
-      paste("spin_rel_trend","png",sep = ".")
-    },
-    content = function(file){
-      normal_plot<-normal_rel_data() %>%
-        select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
-        gather(Type,value,-country,-year) %>%
-        ggplot(aes(year,value,fill=Type,width=0.4))+
-        geom_histogram(stat="identity",position = "dodge")+
-        scale_y_continuous("Effective Change",labels = scales::percent_format())+
-        scale_x_continuous(breaks = seq(min(normal_rel_data()$year),max(normal_rel_data()$year)))+
-        labs(x="",title = glue::glue("Trend of SVHCs and Normal chemicals in {input$normal_country} relative to {input$normal_year}"))+
-        expand_limits(y=c(0,0.75))+
-        theme(axis.text.x = element_text(angle=45,hjust = 1))
-      ggsave(file,plot=print(normal_plot),device="png")
-    }
-  )
-  
+  # Clean the SPIN data of the problematic chemicals
   carc_data<-reactive({
     if (input$carco_type=="All"){
       spin_data() %>% 
@@ -549,6 +390,7 @@ server<-function(input, output, session) {
     }
   })
   
+  # Analyse the trend of the problematic chemicals
   carc_rel_data<-reactive({
     if (input$carc_rel_type=="All"){
       rel_se<-spin_data() %>% 
@@ -580,6 +422,7 @@ server<-function(input, output, session) {
     }
   })
   
+  # Clean the data from the candidate-list
   candidate_data<-reactive({
     input_file2<-input$svhc
     if (is.null(input_file2)){
@@ -595,6 +438,7 @@ server<-function(input, output, session) {
       separate_rows(cas_no,sep = ", ")
   })
   
+  # Clean the SPIN data for the download of the raw data
   grouped_data<-reactive({
     input_file2<-input$svhc
     candidate_list<-read_xlsx(input_file2$datapath,skip=3) %>%
@@ -693,16 +537,7 @@ server<-function(input, output, session) {
     }
   })
   
-  output$debug<-renderTable({
-  })
-  
-  output$test<-renderText({
-    shiny::validate(
-      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"Unsuccesful upload of all files")
-    )
-    "Succesful upload of all files"
-  })
-  
+  # Clean data from the authorisation-list
   auth_data<-reactive({
     input_file3<-input$authorisation
     if (is.null(input_file3)){
@@ -715,6 +550,7 @@ server<-function(input, output, session) {
              latest_application_date=as.Date(latest_application_date,format="%d/%m/%Y"))
   })
   
+  # Clean SPIN data for the trend of single chemicals
   time_data<-reactive({
     spin_data() %>%
       mutate(year=as.Date(ISOdate(year,1,1))) %>%
@@ -725,24 +561,26 @@ server<-function(input, output, session) {
       distinct(cas_no,country,year,.keep_all = T)
   })
   
+  # Clean data for some plots
   plot3_data<-reactive({
     if (input$type=="All"|input$type=="Cas"){
       spin_data() %>%
         distinct(year,country,cas_no,.keep_all = T)
     } else if (input$type=="SVHC"){
-      join2<-spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+      join2<-spin_data() %>% 
         distinct(cas_no,year,country,.keep_all = T) %>%
         inner_join(candidate_data(),by="cas_no") %>%
         distinct(cas_no,year,country,.keep_all = T) %>%
         arrange(country,year)
-      #create plot2----
-      join2 %>% #total use per year per country
+
+      join2 %>%
         group_by(year,country) %>%
         summarize(total_amount=sum(amount)) %>%
         ungroup()
     }
   })
   
+  # Clean data for some plots
   plot4_data<-reactive({
     if (input$type_frame=="All"|input$type_frame=="Cas"){
       spin_data() %>%
@@ -761,6 +599,71 @@ server<-function(input, output, session) {
     }
   })
   
+  ## 2.4 Render tables,text and plots
+  
+  # Potential output for debugging
+  output$debug<-renderTable({
+  })
+  
+  # Display if all the input data was successfully uploaded withouth any errors
+  output$test<-renderText({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"Unsuccesful upload of all files")
+    )
+    "Succesful upload of all files"
+  })
+  
+  # Table displaying five biggest differences to a reference year in tonnes per annum and per type of chemicals
+  output$normal_table<-renderDataTable({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
+    )
+    normal_table_data() %>%
+      group_by(country,year,svhc,cas_no) %>%
+      summarize(total=sum(amount)) %>%
+      filter(country==input$normal_rel_country) %>%
+      inner_join(normal_table_data() %>%
+                   group_by(country,year,svhc,cas_no) %>%
+                   summarize(total=sum(amount)) %>%
+                   filter(country==input$normal_rel_country) %>%
+                   filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
+      select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
+      mutate(difference=total-comp_total) %>%
+      filter(year>input$normal_rel_year) %>%
+      arrange(desc(abs(difference))) %>%
+      slice(1:5) %>%
+      ungroup() %>%
+      left_join(normal_table_data() %>%
+                  distinct(name,cas_no) %>%
+                  select(name,cas_no),by="cas_no") %>%
+      select(year,country,type=svhc,cas_no,name,difference)
+  })
+  
+  # Table displaying the SVHCs chemicals considered as intermediates
+  output$inter_tab<-renderDataTable({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table is shown")
+    )
+    if (input$inter_action==0 & input$inter_remove==0){
+      init_inter
+    } else {
+      inter$data
+    }
+  })
+  
+  # Table displaying problematic chemicals
+  output$carc_tab<-renderDataTable({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table is shown")
+    )
+    if (input$add_action==0 & input$add_remove==0){
+      init_carc
+    } else {
+      carc$data
+    }
+  })
+  
+  # Table displaying five biggest differences to a reference year in tonnes per annum and per type of problematic chemicals
   output$carctable<-renderDataTable({
     shiny::validate(
       need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
@@ -820,121 +723,7 @@ server<-function(input, output, session) {
     }
   })
   
-  output$carc_rel_plot<-renderPlot({
-    shiny::validate(
-      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
-    )
-    if (input$carc_rel_type=="All"){
-      ggplot(carc_rel_data(),aes(year,rela,fill=type))+
-        geom_col(position = position_dodge(width=0.5),width=0.5)+
-        scale_y_continuous(labels = scales::percent_format())+
-        scale_x_continuous(breaks=seq(input$carc_rel_year,max(carc_rel_data()$year)))+
-        theme(axis.text.x = element_text(angle=45,hjust=1))+
-        scale_fill_manual("Problematic Chemicals",values = c("#F8766D","#A3A500","#00BF7D","#00B0F6","#E76BF3"))+
-        labs(title=glue::glue("Trend of Problematic Chemicals in {input$carc_rel_country} relative to {input$carc_rel_year}"),y="Effective Change",x="")
-    } else {
-      ggplot(carc_rel_data(),aes(year,rela,fill=type))+
-        geom_col(position = position_dodge(width=0.5),width=0.5)+
-        scale_y_continuous(labels = scales::percent_format())+
-        scale_x_continuous(breaks=seq(input$carc_rel_year,max(carc_rel_data()$year)))+
-        theme(axis.text.x = element_text(angle=45,hjust=1))+
-        scale_fill_manual("Problematic Chemicals",values = input$col_fourth)+
-        labs(title=glue::glue("Trend of Problematic Chemicals in {input$carc_rel_country} relative to {input$carc_rel_year}"),y="Effective Change",x="")
-    }
-  })
-  
-  output$carcino<-renderPlot({
-    shiny::validate(
-      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
-    )
-    if(input$carco_type=="All"){
-      carc_data() %>%
-        ggplot(aes(year,total_amount,fill=type))+
-        geom_area()+
-        scale_y_continuous(glue::glue("Tonnes per annum used in {input$carco_country}"),labels = scales::comma_format())+
-        scale_fill_discrete("Problematic Chemicals")+
-        labs(x="",title = glue::glue("Trend of Problematic Chemicals in {input$carco_country}"))+
-        scale_x_continuous(breaks=seq(input$carco_year,max(carc_data()$year)))+
-        theme(axis.text.x = element_text(angle=45,hjust = 1))
-    } else{
-      carc_data() %>%
-        ggplot(aes(year,total_amount,fill=type))+
-        geom_area()+
-        scale_y_continuous(glue::glue("Tonnes per annum used in {input$carco_country}"),labels = scales::comma_format())+
-        scale_fill_manual("Problematic Chemicals",values = input$col_third)+
-        labs(x="",title = glue::glue("Trend of Problematic Chemicals in {input$carco_country}"))+
-        scale_x_continuous(breaks=seq(input$carco_year,max(carc_data()$year)))+
-        theme(axis.text.x = element_text(angle=45,hjust = 1))
-    }
-  })
-  
-  output$timeline<-renderPlot({
-    shiny::validate(
-      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
-    )
-    if(input$single_country){
-      
-      Basis<-time_data() %>%
-        filter(year>=input$time_year) %>%
-        filter(country==input$country_choice) %>%
-        filter(cas_no==input$time_cas)
-      
-      doi<-data.frame(xmin=Basis$Datum[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
-      lad<-data.frame(xmin=Basis$latest_application_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
-      sd<-data.frame(xmin=Basis$sunset_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
-      
-      time_plot<-ggplot()+
-        geom_line(data=Basis,aes(year,amount))+
-        expand_limits(y=0)+
-        coord_cartesian(xlim = c(as.Date(glue::glue("{min(Basis$year)}-01-01")),as.Date(glue::glue("{max(Basis$year)}-01-01"))))+
-        geom_rect(data = doi,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="DOI"),alpha=0.2)+
-        geom_rect(data = lad,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="LAD"),alpha=0.2)+
-        geom_rect(data = sd,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="SD"),alpha=0.2)+
-        scale_fill_manual("",values = c("yellow","orange","red"))+
-        scale_x_date(date_breaks = "1 year",date_labels = "%Y")+
-        scale_y_continuous(labels=scales::comma_format())+
-        labs(x="",y=glue::glue("Tonnes used per annum in {Basis$country[1]}"),title = glue::glue("Trend of {Basis$name[1]} in {Basis$country[1]}"))+
-        theme(axis.text.x = element_text(angle=45,vjust = -0.25))
-      
-      if (input$time_glm){
-        print(time_plot+
-                geom_smooth(method = "lm",data = subset(Basis,year>=input$time_glm_year),se=F,aes(year,amount)))
-      } else{
-        print(time_plot)
-      }
-      
-    } else {
-      
-      Basis<-time_data() %>%
-        filter(year>=input$time_year) %>%
-        filter(cas_no==input$time_cas)
-      
-      doi<-data.frame(xmin=Basis$Datum[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
-      lad<-data.frame(xmin=Basis$latest_application_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
-      sd<-data.frame(xmin=Basis$sunset_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
-      
-      time_plot<-ggplot()+
-        geom_line(data=Basis,aes(year,amount,col=country))+
-        expand_limits(y=0)+
-        coord_cartesian(xlim = c(as.Date(glue::glue("{min(Basis$year)}-01-01")),as.Date(glue::glue("{max(Basis$year)}-01-01"))))+
-        geom_rect(data = doi,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="DOI"),alpha=0.2)+
-        geom_rect(data = lad,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="LAD"),alpha=0.2)+
-        geom_rect(data = sd,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="SD"),alpha=0.2)+
-        scale_fill_manual("",values = c("yellow","orange","red"))+
-        scale_x_date(date_breaks = "1 year",date_labels = "%Y")+
-        scale_y_continuous(labels=scales::comma_format())+
-        labs(x="",y=glue::glue("Tonnes used per annum in Nordic Countries"),title = glue::glue("Trend of {Basis$name[1]} in Nordic Countries"))+
-        theme(axis.text.x = element_text(angle=45,vjust = -0.25))
-      
-      if (input$time_glm){
-        print(time_plot+
-                geom_smooth(method = "lm",data = subset(Basis,year>=input$time_glm_year),se=F,aes(year,amount)))
-      } else{
-        print(time_plot)
-      }
-    }
-  })
-  
+  # Table displaying the complete data
   output$table<-renderDataTable({
     shiny::validate(
       need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
@@ -965,7 +754,7 @@ server<-function(input, output, session) {
               grouped_data() %>%
                 rename(tonnes=total)
             } else {
-              spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+              spin_data() %>% 
                 distinct(cas_no,year,country,.keep_all = T) %>%
                 inner_join(candidate_data(),by="cas_no") %>%
                 distinct(cas_no,year,country,.keep_all = T) %>%
@@ -981,7 +770,7 @@ server<-function(input, output, session) {
               grouped_data() %>%
                 rename(tonnes=total)
             } else {
-              spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+              spin_data() %>% 
                 distinct(cas_no,year,country,.keep_all = T) %>%
                 inner_join(candidate_data(),by="cas_no") %>%
                 distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1073,7 +862,7 @@ server<-function(input, output, session) {
               grouped_data() %>%
                 rename(tonnes=total)
             } else {
-              spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+              spin_data() %>%
                 distinct(cas_no,year,country,.keep_all = T) %>%
                 inner_join(candidate_data(),by="cas_no") %>%
                 distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1088,7 +877,7 @@ server<-function(input, output, session) {
               grouped_data() %>%
                 rename(tonnes=total)
             } else {
-              spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+              spin_data() %>%
                 distinct(cas_no,year,country,.keep_all = T) %>%
                 inner_join(candidate_data(),by="cas_no") %>%
                 distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1152,6 +941,142 @@ server<-function(input, output, session) {
     }
   })
   
+  # Trend of problematic chemicals relative to a reference year
+  output$carc_rel_plot<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
+    if (input$carc_rel_type=="All"){
+      ggplot(carc_rel_data(),aes(year,rela,fill=type))+
+        geom_col(position = position_dodge(width=0.5),width=0.5)+
+        scale_y_continuous(labels = scales::percent_format())+
+        scale_x_continuous(breaks=seq(input$carc_rel_year,max(carc_rel_data()$year)))+
+        theme(axis.text.x = element_text(angle=45,hjust=1))+
+        scale_fill_manual("Problematic Chemicals",values = c("#F8766D","#A3A500","#00BF7D","#00B0F6","#E76BF3"))+
+        labs(title=glue::glue("Trend of Problematic Chemicals in {input$carc_rel_country} relative to {input$carc_rel_year}"),y="Effective Change",x="")
+    } else {
+      ggplot(carc_rel_data(),aes(year,rela,fill=type))+
+        geom_col(position = position_dodge(width=0.5),width=0.5)+
+        scale_y_continuous(labels = scales::percent_format())+
+        scale_x_continuous(breaks=seq(input$carc_rel_year,max(carc_rel_data()$year)))+
+        theme(axis.text.x = element_text(angle=45,hjust=1))+
+        scale_fill_manual("Problematic Chemicals",values = input$col_fourth)+
+        labs(title=glue::glue("Trend of Problematic Chemicals in {input$carc_rel_country} relative to {input$carc_rel_year}"),y="Effective Change",x="")
+    }
+  })
+  
+  # Trend of normal and SVHC chemicals relative to a reference year
+  output$normal_rel_plot<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
+    normal_rel_data() %>%
+      select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
+      gather(Type,value,-country,-year) %>%
+      ggplot(aes(year,value,fill=Type,width=0.4))+
+      geom_histogram(stat="identity",position = "dodge")+
+      scale_y_continuous("Effective Change",labels = scales::percent_format())+
+      scale_x_continuous(breaks = seq(min(normal_rel_data()$year),max(normal_rel_data()$year)))+
+      labs(x="",title = glue::glue("Trend of SVHCs and Normal chemicals in {input$normal_country} relative to {input$normal_year}"))+
+      expand_limits(y=c(0,0.75))+
+      theme(axis.text.x = element_text(angle=45,hjust = 1))
+  })
+  
+  # Trend of problematic chemicals
+  output$carcino<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
+    if(input$carco_type=="All"){
+      carc_data() %>%
+        ggplot(aes(year,total_amount,fill=type))+
+        geom_area()+
+        scale_y_continuous(glue::glue("Tonnes per annum used in {input$carco_country}"),labels = scales::comma_format())+
+        scale_fill_discrete("Problematic Chemicals")+
+        labs(x="",title = glue::glue("Trend of Problematic Chemicals in {input$carco_country}"))+
+        scale_x_continuous(breaks=seq(input$carco_year,max(carc_data()$year)))+
+        theme(axis.text.x = element_text(angle=45,hjust = 1))
+    } else{
+      carc_data() %>%
+        ggplot(aes(year,total_amount,fill=type))+
+        geom_area()+
+        scale_y_continuous(glue::glue("Tonnes per annum used in {input$carco_country}"),labels = scales::comma_format())+
+        scale_fill_manual("Problematic Chemicals",values = input$col_third)+
+        labs(x="",title = glue::glue("Trend of Problematic Chemicals in {input$carco_country}"))+
+        scale_x_continuous(breaks=seq(input$carco_year,max(carc_data()$year)))+
+        theme(axis.text.x = element_text(angle=45,hjust = 1))
+    }
+  })
+  
+  # Trend of Single Substances with Trigger Dates
+  output$timeline<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
+    if(input$single_country){
+      
+      Basis<-time_data() %>%
+        filter(year>=input$time_year) %>%
+        filter(country==input$country_choice) %>%
+        filter(cas_no==input$time_cas)
+      
+      doi<-data.frame(xmin=Basis$Datum[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
+      lad<-data.frame(xmin=Basis$latest_application_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
+      sd<-data.frame(xmin=Basis$sunset_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
+      
+      time_plot<-ggplot()+
+        geom_line(data=Basis,aes(year,amount))+
+        expand_limits(y=0)+
+        coord_cartesian(xlim = c(as.Date(glue::glue("{min(Basis$year)}-01-01")),as.Date(glue::glue("{max(Basis$year)}-01-01"))))+
+        geom_rect(data = doi,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="DOI"),alpha=0.2)+
+        geom_rect(data = lad,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="LAD"),alpha=0.2)+
+        geom_rect(data = sd,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="SD"),alpha=0.2)+
+        scale_fill_manual("",values = c("yellow","orange","red"))+
+        scale_x_date(date_breaks = "1 year",date_labels = "%Y")+
+        scale_y_continuous(labels=scales::comma_format())+
+        labs(x="",y=glue::glue("Tonnes used per annum in {Basis$country[1]}"),title = glue::glue("Trend of {Basis$name[1]} in {Basis$country[1]}"))+
+        theme(axis.text.x = element_text(angle=45,vjust = -0.25))
+      
+      if (input$time_glm){
+        print(time_plot+
+                geom_smooth(method = "lm",data = subset(Basis,year>=input$time_glm_year),se=F,aes(year,amount)))
+      } else{
+        print(time_plot)
+      }
+      
+    } else {
+      
+      Basis<-time_data() %>%
+        filter(year>=input$time_year) %>%
+        filter(cas_no==input$time_cas)
+      
+      doi<-data.frame(xmin=Basis$Datum[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
+      lad<-data.frame(xmin=Basis$latest_application_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
+      sd<-data.frame(xmin=Basis$sunset_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
+      
+      time_plot<-ggplot()+
+        geom_line(data=Basis,aes(year,amount,col=country))+
+        expand_limits(y=0)+
+        coord_cartesian(xlim = c(as.Date(glue::glue("{min(Basis$year)}-01-01")),as.Date(glue::glue("{max(Basis$year)}-01-01"))))+
+        geom_rect(data = doi,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="DOI"),alpha=0.2)+
+        geom_rect(data = lad,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="LAD"),alpha=0.2)+
+        geom_rect(data = sd,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,fill="SD"),alpha=0.2)+
+        scale_fill_manual("",values = c("yellow","orange","red"))+
+        scale_x_date(date_breaks = "1 year",date_labels = "%Y")+
+        scale_y_continuous(labels=scales::comma_format())+
+        labs(x="",y=glue::glue("Tonnes used per annum in Nordic Countries"),title = glue::glue("Trend of {Basis$name[1]} in Nordic Countries"))+
+        theme(axis.text.x = element_text(angle=45,vjust = -0.25))
+      
+      if (input$time_glm){
+        print(time_plot+
+                geom_smooth(method = "lm",data = subset(Basis,year>=input$time_glm_year),se=F,aes(year,amount)))
+      } else{
+        print(time_plot)
+      }
+    }
+  })
+  
+  # Fraction of single SVHC entries from the candidate-list which can be found in the SPIN database
   output$pie<-renderPlot({
     shiny::validate(
       need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
@@ -1165,6 +1090,7 @@ server<-function(input, output, session) {
     legend("topright",legend = c("in SPIN","not in SPIN"),col=c("darkred","darkblue"),pch=16)
   })
   
+  # Trend of SVHCs without Intermediates
   output$interplot<-renderPlot({
     shiny::validate(
       need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
@@ -1192,6 +1118,7 @@ server<-function(input, output, session) {
     
   })
   
+  # Trend of SVHCs, single or all chemicals
   output$barplot<-renderPlot({
     shiny::validate(
       need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
@@ -1258,6 +1185,129 @@ server<-function(input, output, session) {
     }
   })
   
+  ## 2.5 Download handler for tables and plots
+  
+  # Data of the table displaying the problematic chemicals
+  output$downloadcarcinogenictable<-downloadHandler(
+    filename = function(){
+      if (input$add_datatype=="xlsx"){
+        paste("problematic_chemicals","xlsx",sep = ".")
+      } else if (input$add_datatype=="csv"){
+        paste("problematic_chemicals","csv",sep = ".")
+      }
+    },
+    content = function(file){
+      if (input$add_datatype=="xlsx"){
+        write_xlsx(carc$data,file)
+      } else if (input$add_datatype=="csv"){
+        write.csv(carc$data,file)
+      }
+    }
+  )
+  
+  # Data of the trend of normal and SVHC chemicals relative to a reference year
+  output$downloadnormalrel_back<-downloadHandler(
+    filename = function(){
+      paste("spin_rel_trend_data","xlsx",sep = ".")
+    },
+    content = function(file){
+      write_xlsx(
+        normal_rel_data() %>%
+          select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
+          gather(Type,value,-country,-year) %>%
+          rename(type=Type,effective_change=value),file)
+    }
+  )
+  
+  # Plot of the trend of normal and SVHC chemicals relative to a reference year
+  output$downloadnormalrel<-downloadHandler(
+    filename = function(){
+      paste("spin_rel_trend","png",sep = ".")
+    },
+    content = function(file){
+      normal_plot<-normal_rel_data() %>%
+        select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
+        gather(Type,value,-country,-year) %>%
+        ggplot(aes(year,value,fill=Type,width=0.4))+
+        geom_histogram(stat="identity",position = "dodge")+
+        scale_y_continuous("Effective Change",labels = scales::percent_format())+
+        scale_x_continuous(breaks = seq(min(normal_rel_data()$year),max(normal_rel_data()$year)))+
+        labs(x="",title = glue::glue("Trend of SVHCs and Normal chemicals in {input$normal_country} relative to {input$normal_year}"))+
+        expand_limits(y=c(0,0.75))+
+        theme(axis.text.x = element_text(angle=45,hjust = 1))
+      ggsave(file,plot=print(normal_plot),device="png")
+    }
+  )
+  
+  # Data of table displaying five biggest differences to a reference year in tonnes per annum and per type of chemicals
+  output$downloadnormal_rel_table<-downloadHandler(
+    filename = function(){
+      if (input$normal_rel_datatype=="csv"){
+        paste("spin_all_rel","csv",sep = ".")
+      } else if (input$normal_rel_datatype=="xlsx"){
+        paste("spin_all_rel","xlsx",sep = ".")
+      }
+    },
+    content = function(file){
+      if (input$normal_rel_datatype=="csv"){
+        write.csv(
+          normal_table_data() %>%
+            group_by(country,year,svhc,cas_no) %>%
+            summarize(total=sum(amount)) %>%
+            filter(country==input$normal_rel_country) %>%
+            inner_join(normal_table_data() %>%
+                         group_by(country,year,svhc,cas_no) %>%
+                         summarize(total=sum(amount)) %>%
+                         filter(country==input$normal_rel_country) %>%
+                         filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
+            select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
+            mutate(difference=total-comp_total) %>%
+            filter(year>input$normal_rel_year) %>%
+            arrange(desc(abs(difference))) %>%
+            slice(1:5) %>%
+            ungroup() %>%
+            rename(current_tonnes=total,reference_tonnes=comp_total),file)
+      } else if (input$normal_rel_datatype=="xlsx"){
+        write_xlsx(
+          normal_table_data() %>%
+            group_by(country,year,svhc,cas_no) %>%
+            summarize(total=sum(amount)) %>%
+            filter(country==input$normal_rel_country) %>%
+            inner_join(normal_table_data() %>%
+                         group_by(country,year,svhc,cas_no) %>%
+                         summarize(total=sum(amount)) %>%
+                         filter(country==input$normal_rel_country) %>%
+                         filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
+            select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
+            mutate(difference=total-comp_total) %>%
+            filter(year>input$normal_rel_year) %>%
+            arrange(desc(abs(difference))) %>%
+            slice(1:5) %>%
+            ungroup() %>%
+            rename(current_tonnes=total,reference_tonnes=comp_total),file)
+      }
+    }
+  )
+  
+  # Data of the table displaying the SVHCs chemicals considered as intermediates
+  output$downloadintertable<-downloadHandler(
+    filename = function(){
+      if (input$inter_datatype=="xlsx"){
+        paste("intermediates","xlsx",sep = ".")
+      } else if (input$inter_datatype=="csv"){
+        paste("intermediates","csv",sep = ".")
+      }
+    },
+    content = function(file){
+      if (input$inter_datatype=="xlsx"){
+        write_xlsx(inter$data,file)
+      } else if (input$inter_datatype=="csv"){
+        write.csv(inter$data,file)
+      }
+    }
+  )
+  
+  # Data of the trend of SVHCs without Intermediates
   output$downloadinterplot_back<-downloadHandler(
     filename = function(){
       paste("spin_inter_trend_data","xlsx",sep = ".")
@@ -1275,6 +1325,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Plot of the trend of SVHCs without Intermediates
   output$downloadinterplot<-downloadHandler(
     filename = function(){
       paste("spin_inter_trend","png",sep = ".")
@@ -1304,6 +1355,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Data of the table displaying five biggest differences to a reference year in tonnes per annum and per type of problematic chemicals
   output$downloadcarctable<-downloadHandler(
     filename = function(){
       if (input$carc_table_datatype=="csv"){
@@ -1423,6 +1475,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Data of the trend of problematic chemicals relative to a reference year
   output$downloadcarcorel_back<-downloadHandler(
     filename = function(){
       paste("spin_rel_problematic_chemicals","xlsx",sep = ".")
@@ -1433,6 +1486,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Plot of the trend of problematic chemicals relative to a reference year
   output$downloadcarcorel<-downloadHandler(
     filename = function(){
       paste("spin_rel_poblematic_chemicals","png",sep=".")
@@ -1459,6 +1513,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Data of the trend of problematic chemicals
   output$downloadcarcoplot_back<-downloadHandler(
     filename = function(){
       paste("spin_area_prob_data","xlsx",sep = ".")
@@ -1469,6 +1524,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Plot of the trend of problematic chemicals
   output$downloadcarcoplot<-downloadHandler(
     filename = function(){
       paste("spin_area_prob","png",sep = ".")
@@ -1498,6 +1554,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Data of the trend of Single Substances with Trigger Dates
   output$downloadtimeline_back<-downloadHandler(
     filename = function(){
       paste("spin_timeline_data","xlsx",sep = ".")
@@ -1543,6 +1600,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Plot of the trend of Single Substances with Trigger Dates
   output$downloadtimeline<-downloadHandler(
     filename = function(){
       paste("spin_timeline","png",sep = ".")
@@ -1613,6 +1671,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Plot displaying the fraction of single SVHC entries from the candidate-list which can be found in the SPIN database
   output$downloadpie<-downloadHandler(
     filename = function(){
       paste("spin_pie","png",sep = ".")
@@ -1630,6 +1689,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Data of the table displaying the complete data
   output$downloadtable<-downloadHandler(
     filename = function(){
       if (input$frame_datatype=="csv"){
@@ -1667,7 +1727,7 @@ server<-function(input, output, session) {
                     grouped_data() %>%
                       rename(tonnes=total)
                   } else {
-                    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                    spin_data() %>% 
                       distinct(cas_no,year,country,.keep_all = T) %>%
                       inner_join(candidate_data(),by="cas_no") %>%
                       distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1683,7 +1743,7 @@ server<-function(input, output, session) {
                     grouped_data() %>%
                       rename(tonnes=total)
                   } else {
-                    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                    spin_data() %>% 
                       distinct(cas_no,year,country,.keep_all = T) %>%
                       inner_join(candidate_data(),by="cas_no") %>%
                       distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1775,7 +1835,7 @@ server<-function(input, output, session) {
                     grouped_data() %>%
                       rename(tonnes=total)
                   } else {
-                    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                    spin_data() %>% 
                       distinct(cas_no,year,country,.keep_all = T) %>%
                       inner_join(candidate_data(),by="cas_no") %>%
                       distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1790,7 +1850,7 @@ server<-function(input, output, session) {
                     grouped_data() %>%
                       rename(tonnes=total)
                   } else {
-                    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                    spin_data() %>% 
                       distinct(cas_no,year,country,.keep_all = T) %>%
                       inner_join(candidate_data(),by="cas_no") %>%
                       distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1880,7 +1940,7 @@ server<-function(input, output, session) {
                     grouped_data() %>%
                       rename(tonnes=total)
                   } else {
-                    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                    spin_data() %>% 
                       distinct(cas_no,year,country,.keep_all = T) %>%
                       inner_join(candidate_data(),by="cas_no") %>%
                       distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1896,7 +1956,7 @@ server<-function(input, output, session) {
                     grouped_data() %>%
                       rename(tonnes=total)
                   }
-                  spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                  spin_data() %>% 
                     distinct(cas_no,year,country,.keep_all = T) %>%
                     inner_join(candidate_data(),by="cas_no") %>%
                     distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1987,7 +2047,7 @@ server<-function(input, output, session) {
                     grouped_data() %>%
                       rename(tonnes=total)
                   } else {
-                    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                    spin_data() %>% 
                       distinct(cas_no,year,country,.keep_all = T) %>%
                       inner_join(candidate_data(),by="cas_no") %>%
                       distinct(cas_no,year,country,.keep_all = T) %>%
@@ -2002,7 +2062,7 @@ server<-function(input, output, session) {
                     grouped_data() %>%
                       rename(tonnes=total)
                   } else {
-                    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                    spin_data() %>% 
                       distinct(cas_no,year,country,.keep_all = T) %>%
                       inner_join(candidate_data(),by="cas_no") %>%
                       distinct(cas_no,year,country,.keep_all = T) %>%
@@ -2068,6 +2128,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Data of the trend of SVHCs, single or all chemicals
   output$downloadplot_back<-downloadHandler(
     filename = function(){
       paste("spin_plot_data","xlsx",sep = ".")
@@ -2098,6 +2159,7 @@ server<-function(input, output, session) {
     }
   )
   
+  # Plot of the trend of SVHCs, single or all chemicals
   output$downloadplot<-downloadHandler(
     filename = function(){
       paste("spin_plot","png",sep = ".")
