@@ -44,10 +44,12 @@ ui<-dashboardPage(
                                                  "INNER JOIN UseT AS u",
                                                  br(),
                                                  "ON u.PID=sp.PID;")),
-                               tags$li("You will get a new data table. Save this query under a appropriate name and export this table. It is important that you export this file as 
-                                 a .txt. When you get in the export menu it is crucial that you do not maintain the format, otherwise a lot of data will 
-                                 be lost"),
-                               tags$li("You have to convert the .txt to a .txt.gz since the .txt format is too big to upload. You can do this for example with",tags$a(href="https://www.7-zip.de/","7-Zip")))),
+                               tags$li("You will get a new data table. Save this query under 
+                               a appropriate name and export this table. It is important that you export this file as 
+                               a .txt. When you get in the export menu it is crucial that you do not maintain the format, 
+                               otherwise a lot of data will be lost"),
+                               tags$li("You have to convert the .txt to a .txt.gz since the .txt format is too big to upload. 
+                                       You can do this for example with",tags$a(href="https://www.7-zip.de/","7-Zip")))),
                            p(h2("Candidate-list"),
                              tags$ol(
                                tags$li("Download the",strong("English"),"version of the current Candidate-list as a .xlsx on the",
@@ -71,24 +73,33 @@ ui<-dashboardPage(
                                   selectInput(inputId = "year",label=strong("Years since"),choices = seq(2000,2017),
                                               selected = 2000),
                                   selectInput(inputId = "type",label = strong("Type"),choices = c("SVHC","All","Cas")),
-                                  conditionalPanel("input.type=='Cas'",textInput(inputId = "cas",strong("Enter Cas-number"),placeholder = "50-00-0")),
+                                  conditionalPanel("input.type=='Cas'",textInput(inputId = "cas",strong("Enter Cas-number"),
+                                                                                 placeholder = "50-00-0")),
                                   checkboxInput(inputId = "glm","Lm"),
-                                  conditionalPanel("input.glm==true",selectInput(inputId = "glm_year",label = "Lm since",choices = seq(2000,2017))),
+                                  conditionalPanel("input.glm==true",selectInput(inputId = "glm_year",label = "Lm since",
+                                                                                 choices = seq(2000,2017))),
                                   colourInput(inputId = "col_first",label = strong("Colour for plot"),value = "#91CFEE")),
                            column(5,downloadButton("downloadplot","Download Plot")),
                            column(5,downloadButton("downloadplot_back","Download Data"))),
                        box(width = 7,column(plotOutput(outputId = "barplot"),width = 12))),
-              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "normal_country",label = strong("Country"),choices = c("SE","DK","FI","NO")),
-                                                               selectInput(inputId = "normal_year",label = strong("Reference Year"),choices = seq(2000,2017))),
+              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "normal_country",label = strong("Country"),
+                                                                             choices = c("SE","DK","FI","NO")),
+                                                               selectInput(inputId = "normal_year",label = strong("Reference Year"),
+                                                                           choices = seq(2000,2017))),
                            column(5,downloadButton("downloadnormalrel","Download Plot")),
                            column(5,downloadButton("downloadnormalrel_back","Download Data")),
-                           column(12,br(),helpText("For the year 2000 there is no data for Finland which is acknowledged as 0 tonnes of chemicals. Therefore, the relative chemical production in finland with the reference year 2000 is infinite big"))),
+                           column(12,br(),helpText("For the year 2000 there is no data for Finland which is acknowledged as 0 tonnes of chemicals. 
+                                                   Therefore, the relative chemical production in finland with the reference year 2000 is infinite big"))),
                        box(width = 7,column(12,plotOutput(outputId = "normal_rel_plot")))),
-              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "normal_rel_country",label = strong("Country"),choices = c("SE","NO","DK","FI")),
-                                                               selectInput(inputId = "normal_rel_year",label = strong("Reference Year"),choices = seq(2000,2017)),
-                                                               radioButtons(inputId = "normal_rel_datatype",label = strong("File Type"),choices = c("csv","xlsx")),
+              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "normal_rel_country",label = strong("Country"),
+                                                                             choices = c("SE","NO","DK","FI")),
+                                                               selectInput(inputId = "normal_rel_year",label = strong("Reference Year"),
+                                                                           choices = seq(2000,2017)),
+                                                               radioButtons(inputId = "normal_rel_datatype",label = strong("File Type"),
+                                                                            choices = c("csv","xlsx")),
                                                                downloadButton("downloadnormal_rel_table","Download Table"))),
-                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes per annum and per type of chemicals are displayed."),br(),dataTableOutput(outputId = "normal_table")))),
+                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes per annum
+                                                 and per type of chemicals are displayed."),br(),dataTableOutput(outputId = "normal_table")))),
               fluidRow(column(12,h2("Completeness of The SPIN Database"))),
               fluidRow(box(width = 4,column(12,p("Here you can see the fraction of single SVHC entries from the 
                                                                                        candidate-list which can be found in the SPIN database.",
@@ -100,57 +111,91 @@ ui<-dashboardPage(
                                             downloadButton("downloadpie","Download Plot"))),
                        box(width = 7,column(12,plotOutput(outputId = "pie")))),
               fluidRow(column(12,h2("Trend of Single Substances with Trigger Dates"))),
-              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "time_year",label = "Years since",choices = seq(as.Date(ISOdate(2000,1,1)),as.Date(ISOdate(2017,1,1)),"years")),
+              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "time_year",label = "Years since",
+                                                                             choices = seq(as.Date(ISOdate(2000,1,1)),as.Date(ISOdate(2017,1,1)),"years")),
                                                                checkboxInput(inputId = "single_country","Single country"),
-                                                               conditionalPanel("input.single_country==true",selectInput(inputId = "country_choice",label = strong("Country"),choices = c("SE","NO","DK","FI"))),
+                                                               conditionalPanel("input.single_country==true",
+                                                                                selectInput(inputId = "country_choice",label = strong("Country"),
+                                                                                            choices = c("SE","NO","DK","FI"))),
                                                                checkboxInput(inputId = "time_glm","Lm"),
-                                                               conditionalPanel("input.time_glm==true",selectInput(inputId = "time_glm_year",label = "Lm since",choices = seq(as.Date(ISOdate(2000,1,1)),as.Date(ISOdate(2017,1,1)),"years"))),
-                                                               textInput(inputId = "time_cas",strong("Enter Cas-number"),placeholder = "50-00-0",value = "50-00-0")),
+                                                               conditionalPanel("input.time_glm==true",
+                                                                                selectInput(inputId = "time_glm_year",label = "Lm since",
+                                                                                            choices = seq(as.Date(ISOdate(2000,1,1)),
+                                                                                                          as.Date(ISOdate(2017,1,1)),"years"))),
+                                                               textInput(inputId = "time_cas",strong("Enter Cas-number"),
+                                                                         placeholder = "50-00-0",value = "50-00-0")),
                            column(5,downloadButton("downloadtimeline","Download Plot")),
                            column(5,downloadButton("downloadtimeline_back","Download Data")),
                            br(),
-                           column(12,br(),helpText("The data from SPIN is just given as years. For this plot the data for every year was plotted at the first of January (DOI = Date of inclusion, LAD = Latest application date, SD = Sunset Date)."))),
+                           column(12,br(),helpText("The data from SPIN is just given as years. 
+                                                   For this plot the data for every year was plotted at the first of January 
+                                                   (DOI = Date of inclusion, LAD = Latest application date, SD = Sunset Date)."))),
                        box(width = 7,column(12,plotOutput(outputId = "timeline"))))),
       tabItem(tabName = "carco",
               fluidRow(box(width = 6,background = "light-blue",column(12,offset = 1,h2(strong("Trend of Problematic Chemicals"))))),
-              fluidRow(box(width = 4,column(9,textInput(inputId = "add_cas",label = strong("Add Cas-number"),value = "50-00-0",placeholder = "50-00-0"),
-                                            selectInput(inputId = "add_type",label = strong("Add to which type"),choices =c("carcinogenic","equivalent concern","mutagenic","PBT/vPVB","toxic for reproduction")),
+              fluidRow(box(width = 4,column(9,textInput(inputId = "add_cas",label = strong("Add Cas-number"),value = "50-00-0",
+                                                        placeholder = "50-00-0"),
+                                            selectInput(inputId = "add_type",label = strong("Add to which type"),
+                                                        choices =c("carcinogenic","equivalent concern","mutagenic","PBT/vPVB",
+                                                                   "toxic for reproduction")),
                                             actionButton(inputId = "add_action","Add"),
                                             actionButton(inputId = "add_remove","Remove"),
                                             p(br()),
                                             radioButtons(inputId = "add_datatype",label = strong("File Type"),choices = c("csv","xlsx")),
                                             downloadButton("downloadcarcinogenictable","Download Table"))),
-                       box(width=7,column(12,p("The classification of chemicals based on their properties can be seen in this Table. You can add additional Cas-numbers."),
+                       box(width=7,column(12,p("The classification of chemicals based on their properties can be seen in this Table. 
+                                               You can add additional Cas-numbers."),
                                           dataTableOutput(outputId = "carc_tab")))),
-              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "carco_country",label = strong("Country"),choices = c("SE","NO","DK","FI")),
-                                                               selectInput(inputId = "carco_type",label = strong("Type"),choices = c("All","carcinogenic","equivalent concern","mutagenic","PBT/vPVB","toxic for reproduction")),
-                                                               selectInput(inputId = "carco_year",label = strong("Years since"),choices = seq(2000,2017)),
-                                                               conditionalPanel("input.carco_type!='All'",colourInput(inputId = "col_third",label = strong("Colour for plot"),value = "#F8766D"))),
+              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "carco_country",label = strong("Country"),
+                                                                             choices = c("SE","NO","DK","FI")),
+                                                               selectInput(inputId = "carco_type",label = strong("Type"),
+                                                                           choices = c("All","carcinogenic","equivalent concern",
+                                                                                       "mutagenic","PBT/vPVB","toxic for reproduction")),
+                                                               selectInput(inputId = "carco_year",label = strong("Years since"),
+                                                                           choices = seq(2000,2017)),
+                                                               conditionalPanel("input.carco_type!='All'",colourInput(inputId = "col_third",
+                                                                                                                      label = strong("Colour for plot"),
+                                                                                                                      value = "#F8766D"))),
                            column(5,downloadButton("downloadcarcoplot","Download Plot")),
                            column(5,downloadButton("downloadcarcoplot_back","Download Data"))),
                        box(width = 7,column(12,plotOutput(outputId = "carcino")))),
-              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "carc_rel_year",label = strong("Reference Year"),choices = seq(2000,2017)),
-                                                               selectInput(inputId = "carc_rel_country",choices = c("SE","NO","FI","DK"),label = strong("Country")),
-                                                               selectInput(inputId = "carc_rel_type",label = strong("Type"),choices = c("All","carcinogenic","equivalent concern","mutagenic","PBT/vPVB","toxic for reproduction")),
-                                                               conditionalPanel("input.carc_rel_type!='All'",colourInput(inputId = "col_fourth",label = strong("Colour for plot"),value = "#F8766D"))),
+              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "carc_rel_year",label = strong("Reference Year"),
+                                                                             choices = seq(2000,2017)),
+                                                               selectInput(inputId = "carc_rel_country",choices = c("SE","NO","FI","DK"),
+                                                                           label = strong("Country")),
+                                                               selectInput(inputId = "carc_rel_type",label = strong("Type"),
+                                                                           choices = c("All","carcinogenic","equivalent concern",
+                                                                                       "mutagenic","PBT/vPVB","toxic for reproduction")),
+                                                               conditionalPanel("input.carc_rel_type!='All'",
+                                                                                colourInput(inputId = "col_fourth",label = strong("Colour for plot"),
+                                                                                            value = "#F8766D"))),
                            column(5,downloadButton("downloadcarcorel","Download Plot")),
                            column(5,downloadButton("downloadcarcorel_back","Download Data"))),
                        box(width = 7,column(12,plotOutput(outputId = "carc_rel_plot")))),
-              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "carc_table_country",label = strong("Country"),choices = c("SE","NO","DK","FI")),
-                                                               selectInput(inputId = "carc_table_year",label = strong("Reference Year"),choices = seq(2000,2017)),
-                                                               selectInput(inputId = "carc_table_type",label = strong("Type"),choices = c("All","carcinogenic","equivalent concern","mutagenic","PBT/vPVB","toxic for reproduction")),
-                                                               radioButtons(inputId = "carc_table_datatype",label = strong("File Type"),choices = c("csv","xlsx")),
+              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "carc_table_country",label = strong("Country"),
+                                                                             choices = c("SE","NO","DK","FI")),
+                                                               selectInput(inputId = "carc_table_year",label = strong("Reference Year"),
+                                                                           choices = seq(2000,2017)),
+                                                               selectInput(inputId = "carc_table_type",label = strong("Type"),
+                                                                           choices = c("All","carcinogenic","equivalent concern","mutagenic",
+                                                                                       "PBT/vPVB","toxic for reproduction")),
+                                                               radioButtons(inputId = "carc_table_datatype",label = strong("File Type"),
+                                                                            choices = c("csv","xlsx")),
                                                                downloadButton("downloadcarctable","Download Table"))),
-                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes per annum and per type of chemicals are displayed."),br(),dataTableOutput(outputId = "carctable"))))),
+                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes
+                                                 per annum and per type of chemicals are displayed."),br(),dataTableOutput(outputId = "carctable"))))),
       tabItem(tabName = "intermediate",
               fluidRow(box(width = 6,background = "light-blue",column(12,offset=1,h2(strong("Trend of SVHCs without Intermediates"))))),
-              fluidRow(box(width = 4,column(9,textInput(inputId = "inter_cas",label = strong("Add Cas-number"),value = "50-00-0",placeholder = "50-00-0"),
+              fluidRow(box(width = 4,column(9,textInput(inputId = "inter_cas",label = strong("Add Cas-number"),value = "50-00-0",
+                                                        placeholder = "50-00-0"),
                                             actionButton(inputId = "inter_action","Add"),
                                             actionButton(inputId = "inter_remove","Remove"),
                                             p(br()),
                                             radioButtons(inputId = "inter_datatype",label = strong("File Type"),choices = c("csv","xlsx")),
                                             downloadButton("downloadintertable","Download Table"))),
-                       box(width=7,column(12,p("The substances you see in the table are the substances which are classified as intermediates. These get not plotted in the following plot. You can add Cas-numbers."),
+                       box(width=7,column(12,p("The substances you see in the table are the substances 
+                                               which are classified as intermediates. These get not plotted in the following plot. 
+                                               You can add Cas-numbers."),
                                           dataTableOutput(outputId = "inter_tab")))),
               fluidRow(box(title="Controls",width = 4,
                            column(9,selectInput(inputId = "inter_countries",label = strong("Country"), choices = c("SE","DK","NO","FI"),
@@ -158,7 +203,8 @@ ui<-dashboardPage(
                                   selectInput(inputId = "inter_year",label=strong("Years since"),choices = seq(2000,2017),
                                               selected = 2000),
                                   checkboxInput(inputId = "inter_glm","Lm"),
-                                  conditionalPanel("input.inter_glm==true",selectInput(inputId = "inter_glm_year",label = "Lm since",choices = seq(2000,2017))),
+                                  conditionalPanel("input.inter_glm==true",selectInput(inputId = "inter_glm_year",
+                                                                                       label = "Lm since",choices = seq(2000,2017))),
                                   colourInput(inputId = "col_second",label = strong("Colour for plot"),value = "#91CFEE")),
                            column(5,downloadButton("downloadinterplot","Download Plot")),
                            column(5,downloadButton("downloadinterplot_back","Download Data"))),
@@ -166,15 +212,23 @@ ui<-dashboardPage(
       tabItem(tabName = "frame",
               fluidRow(box(width = 4,background = "light-blue",column(12,offset = 3,h2(strong("Raw Data"))))),
               fluidRow(column(12,p())),
-              fluidRow(box(title = "Controls",width = 3,column(9,selectInput(inputId = "dataframe",label = strong("Select Data Frame"),choices = c("Raw","Total")),
-                                                               selectInput(inputId = "country_frame",label = strong("Country"),choices = c("SE","NO","FI","DK","Nordic")),
-                                                               selectInput(inputId = "year_frame",label = strong("Years since"),seq(2000,2017)),
+              fluidRow(box(title = "Controls",width = 3,column(9,selectInput(inputId = "dataframe",label = strong("Select Data Frame"),
+                                                                             choices = c("Raw","Total")),
+                                                               selectInput(inputId = "country_frame",label = strong("Country"),
+                                                                           choices = c("SE","NO","FI","DK","Nordic")),
+                                                               selectInput(inputId = "year_frame",label = strong("Years since"),
+                                                                           seq(2000,2017)),
                                                                checkboxInput(inputId = "year_filter","Single year"),
-                                                               conditionalPanel("input.year_filter==true",selectInput(inputId = "year_filter_frame",label = strong("Year"),choices = seq(2000,2017))),
-                                                               selectInput(inputId = "type_frame",choices = c("SVHC","All","Cas"),label = strong("Type")),
-                                                               conditionalPanel("input.type_frame=='Cas'",textInput(inputId = "cas_frame",strong("Enter Cas-number"),placeholder = "50-00-0")),
-                                                               conditionalPanel("input.type_frame=='SVHC' & input.dataframe=='Raw'",checkboxInput(inputId = "group","Grouped")),
-                                                               radioButtons(inputId = "frame_datatype",label = strong("File Type"),choices = c("csv","xlsx")),
+                                                               conditionalPanel("input.year_filter==true",selectInput(inputId = "year_filter_frame",
+                                                                                                                      label = strong("Year"),choices = seq(2000,2017))),
+                                                               selectInput(inputId = "type_frame",choices = c("SVHC","All","Cas"),
+                                                                           label = strong("Type")),
+                                                               conditionalPanel("input.type_frame=='Cas'",textInput(inputId = "cas_frame",
+                                                                                                                    strong("Enter Cas-number"),placeholder = "50-00-0")),
+                                                               conditionalPanel("input.type_frame=='SVHC' & input.dataframe=='Raw'",
+                                                                                checkboxInput(inputId = "group","Grouped")),
+                                                               radioButtons(inputId = "frame_datatype",label = strong("File Type"),
+                                                                            choices = c("csv","xlsx")),
                                                                downloadButton("downloadtable","Download Table"))),
                        box(width = 9,column(12,dataTableOutput(outputId = "table"))))))))
 
@@ -231,8 +285,10 @@ server<-function(input, output, session) {
     updateSelectInput(session,"glm_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"normal_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"normal_rel_year",choices = seq(min(temp_data$year),max(temp_data$year)))
-    updateSelectInput(session,"time_year",choices = seq(as.Date(ISOdate(min(temp_data$year),1,1)),as.Date(ISOdate(max(temp_data$year),1,1)),"years"))
-    updateSelectInput(session,"time_glm_year",choices = seq(as.Date(ISOdate(min(temp_data$year),1,1)),as.Date(ISOdate(max(temp_data$year),1,1)),"years"))
+    updateSelectInput(session,"time_year",choices = seq(as.Date(ISOdate(min(temp_data$year),1,1)),
+                                                        as.Date(ISOdate(max(temp_data$year),1,1)),"years"))
+    updateSelectInput(session,"time_glm_year",choices = seq(as.Date(ISOdate(min(temp_data$year),1,1)),
+                                                            as.Date(ISOdate(max(temp_data$year),1,1)),"years"))
     updateSelectInput(session,"carco_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"carc_rel_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"carc_table_year",choices = seq(min(temp_data$year),max(temp_data$year)))
@@ -242,30 +298,40 @@ server<-function(input, output, session) {
     updateSelectInput(session,"year_filter_frame",choices = seq(min(temp_data$year),max(temp_data$year)))
   })
   
-  
+  # Supplement data is loaded which states problematic chemicals and divides them in different categories. Chemicals can
+  # be added to and removed from the list
   init_carc<-read_xlsx("./data/carcinogenic.xlsx") %>%
     separate_rows(cas_no,sep = ", ") %>%
     select(name=Name,type,cas_no)
   
-  
+  # Makes the list reactive
   carc<-reactiveValues(data=init_carc)
   
-  init_inter<-data.frame(cas_no=c("1317-36-8","107-06-2","75-56-9","50-32-8","79-06-1","107-15-3"),name=c("Lead monoxide (lead oxide)","1,2-dichloroethane","Methyloxirane (Propylene oxide)","Benzo[def]chrysene (Benzo[a]pyrene)","Acrylamide","Ethylenediamine")) %>%
+  # State a few Intermediates which are considered as SVHC and are intermediates. Chemicals can
+  # be added to and removed from the list
+  init_inter<-data.frame(cas_no=c("1317-36-8","107-06-2","75-56-9","50-32-8","79-06-1","107-15-3"),
+                         name=c("Lead monoxide (lead oxide)","1,2-dichloroethane",
+                                "Methyloxirane (Propylene oxide)","Benzo[def]chrysene (Benzo[a]pyrene)",
+                                "Acrylamide","Ethylenediamine")) %>%
     mutate(cas_no=as.character(cas_no),
            name=as.character(name))
   
+  # Makes the list reactive
   inter<-reactiveValues(data=init_inter)
   
+  
+  # Join the spin data with the candidate-list
   join_data<-reactive({
-    spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+    spin_data() %>% 
       distinct(cas_no,year,country,.keep_all = T) %>%
       inner_join(candidate_data(),by="cas_no") %>%
       distinct(cas_no,year,country,.keep_all = T) %>%
       arrange(country,year)
   })
   
+  # Remove or add chemicals to the 
   observeEvent(input$add_remove,{
-    if (length(spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+    if (length(spin_data() %>% 
                distinct(cas_no,year,country,.keep_all = T) %>%
                filter(cas_no==input$add_cas) %>%
                pull(name))==0){
