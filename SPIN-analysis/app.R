@@ -71,13 +71,13 @@ ui<-dashboardPage(
               fluidRow(box(title="Controls",width = 4,
                            column(9,selectInput(inputId = "countries",label = strong("Country"), choices = c("SE","DK","NO","FI"),
                                                 selected = "SE"),
-                                  selectInput(inputId = "year",label=strong("Years since"),choices = seq(2000,2017),
+                                  selectInput(inputId = "year",label=strong("Years Since"),choices = seq(2000,2017),
                                               selected = 2000),
                                   selectInput(inputId = "type",label = strong("Type"),choices = c("SVHC","All","Cas")),
                                   conditionalPanel("input.type=='Cas'",textInput(inputId = "cas",strong("Enter Cas-number"),
                                                                                  placeholder = "50-00-0")),
                                   checkboxInput(inputId = "glm","Lm"),
-                                  conditionalPanel("input.glm==true",selectInput(inputId = "glm_year",label = "Lm since",
+                                  conditionalPanel("input.glm==true",selectInput(inputId = "glm_year",label = "Lm Since",
                                                                                  choices = seq(2000,2017))),
                                   colourInput(inputId = "col_first",label = strong("Colour for plot"),value = "#91CFEE")),
                            column(5,downloadButton("downloadplot","Download Plot")),
@@ -90,17 +90,21 @@ ui<-dashboardPage(
                            column(5,downloadButton("downloadnormalrel","Download Plot")),
                            column(5,downloadButton("downloadnormalrel_back","Download Data")),
                            column(12,br(),helpText("For the year 2000 there is no data for Finland which is acknowledged as 0 tonnes of chemicals. 
-                                                   Therefore, the relative chemical production in finland with the reference year 2000 is infinite big"))),
+                                                   Therefore, the relative chemical production in finland with the reference year 2000 is infinite big."))),
                        box(width = 7,column(12,plotOutput(outputId = "normal_rel_plot")))),
               fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "normal_rel_country",label = strong("Country"),
                                                                              choices = c("SE","NO","DK","FI")),
                                                                selectInput(inputId = "normal_rel_year",label = strong("Reference Year"),
                                                                            choices = seq(2000,2017)),
+                                                               selectInput(inputId = "compare_rel_year",label = strong("Comparison Year"),
+                                                                           choices = seq(2000,2017)),
                                                                radioButtons(inputId = "normal_rel_datatype",label = strong("File Type"),
                                                                             choices = c("csv","xlsx")),
                                                                downloadButton("downloadnormal_rel_table","Download Table"))),
-                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes
-                                                 and per type of chemicals are displayed."),br(),dataTableOutput(outputId = "normal_table")))),
+                       box(width = 7,column(12,p("In this table the five chemicals with the biggest differences of the chemical production between the comparison and
+                                                 reference year in tonnes and per type of chemicals are displayed. Negative differences 
+                                                 indicate a smaller production amount
+                                                 in the comparison year."),br(),dataTableOutput(outputId = "normal_table")))),
               fluidRow(column(12,h2("Completeness of The SPIN Database"))),
               fluidRow(box(width = 4,column(12,p("Here you can see the fraction of single SVHC entries from the 
                                                                                        candidate-list which can be found in the SPIN database.",
@@ -112,7 +116,7 @@ ui<-dashboardPage(
                                             downloadButton("downloadpie","Download Plot"))),
                        box(width = 7,column(12,plotOutput(outputId = "pie")))),
               fluidRow(column(12,h2("Trend of Single Substances with Trigger Dates"))),
-              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "time_year",label = "Years since",
+              fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "time_year",label = "Years Since",
                                                                              choices = seq(as.Date(ISOdate(2000,1,1)),as.Date(ISOdate(2017,1,1)),"years")),
                                                                checkboxInput(inputId = "single_country","Single country"),
                                                                conditionalPanel("input.single_country==true",
@@ -120,7 +124,7 @@ ui<-dashboardPage(
                                                                                             choices = c("SE","NO","DK","FI"))),
                                                                checkboxInput(inputId = "time_glm","Lm"),
                                                                conditionalPanel("input.time_glm==true",
-                                                                                selectInput(inputId = "time_glm_year",label = "Lm since",
+                                                                                selectInput(inputId = "time_glm_year",label = "Lm Since",
                                                                                             choices = seq(as.Date(ISOdate(2000,1,1)),
                                                                                                           as.Date(ISOdate(2017,1,1)),"years"))),
                                                                textInput(inputId = "time_cas",strong("Enter Cas-number"),
@@ -151,7 +155,7 @@ ui<-dashboardPage(
                                                                selectInput(inputId = "carco_type",label = strong("Type"),
                                                                            choices = c("All","carcinogenic","equivalent concern",
                                                                                        "mutagenic","PBT/vPVB","toxic for reproduction")),
-                                                               selectInput(inputId = "carco_year",label = strong("Years since"),
+                                                               selectInput(inputId = "carco_year",label = strong("Years Since"),
                                                                            choices = seq(2000,2017)),
                                                                conditionalPanel("input.carco_type!='All'",colourInput(inputId = "col_third",
                                                                                                                       label = strong("Colour for plot"),
@@ -176,14 +180,18 @@ ui<-dashboardPage(
                                                                              choices = c("SE","NO","DK","FI")),
                                                                selectInput(inputId = "carc_table_year",label = strong("Reference Year"),
                                                                            choices = seq(2000,2017)),
+                                                               selectInput(inputId = "comparison_table_year",label = strong("Comparison Year"),
+                                                                           choices = seq(2000,2017)),
                                                                selectInput(inputId = "carc_table_type",label = strong("Type"),
                                                                            choices = c("All","carcinogenic","equivalent concern","mutagenic",
                                                                                        "PBT/vPVB","toxic for reproduction")),
                                                                radioButtons(inputId = "carc_table_datatype",label = strong("File Type"),
                                                                             choices = c("csv","xlsx")),
                                                                downloadButton("downloadcarctable","Download Table"))),
-                       box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes
-                                                 and per type of problematic chemicals are displayed."),br(),
+                       box(width = 7,column(12,p("In this table the five chemicals with the biggest differences of the chemical production between the comparison and
+                                                 reference year in tonnes and per type of problematic chemicals are displayed. Negative differences 
+                                                 indicate a smaller production amount
+                                                 in the comparison year."),br(),
                                             dataTableOutput(outputId = "carctable"))))),
       tabItem(tabName = "intermediate",
               fluidRow(box(width = 5,background = "light-blue",column(12,offset=1,h2(strong("Trend without Intermediates")))),
@@ -201,11 +209,11 @@ ui<-dashboardPage(
               fluidRow(box(title="Controls",width = 4,
                            column(9,selectInput(inputId = "inter_countries",label = strong("Country"), choices = c("SE","DK","NO","FI"),
                                                 selected = "SE"),
-                                  selectInput(inputId = "inter_year",label=strong("Years since"),choices = seq(2000,2017),
+                                  selectInput(inputId = "inter_year",label=strong("Years Since"),choices = seq(2000,2017),
                                               selected = 2000),
                                   checkboxInput(inputId = "inter_glm","Lm"),
                                   conditionalPanel("input.inter_glm==true",selectInput(inputId = "inter_glm_year",
-                                                                                       label = "Lm since",choices = seq(2000,2017))),
+                                                                                       label = "Lm Since",choices = seq(2000,2017))),
                                   colourInput(inputId = "col_second",label = strong("Colour for plot"),value = "#91CFEE")),
                            column(5,downloadButton("downloadinterplot","Download Plot")),
                            column(5,downloadButton("downloadinterplot_back","Download Data"))),
@@ -217,7 +225,7 @@ ui<-dashboardPage(
                                                                              choices = c("Raw","Total")),
                                                                selectInput(inputId = "country_frame",label = strong("Country"),
                                                                            choices = c("SE","NO","FI","DK","Nordic")),
-                                                               selectInput(inputId = "year_frame",label = strong("Years since"),
+                                                               selectInput(inputId = "year_frame",label = strong("Years Since"),
                                                                            seq(2000,2017)),
                                                                checkboxInput(inputId = "year_filter","Single year"),
                                                                conditionalPanel("input.year_filter==true",selectInput(inputId = "year_filter_frame",
@@ -270,6 +278,7 @@ server<-function(input, output, session) {
     updateSelectInput(session,"glm_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"normal_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"normal_rel_year",choices = seq(min(temp_data$year),max(temp_data$year)))
+    updateSelectInput(session,"compare_rel_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"time_year",choices = seq(as.Date(ISOdate(min(temp_data$year),1,1)),
                                                         as.Date(ISOdate(max(temp_data$year),1,1)),"years"))
     updateSelectInput(session,"time_glm_year",choices = seq(as.Date(ISOdate(min(temp_data$year),1,1)),
@@ -277,6 +286,7 @@ server<-function(input, output, session) {
     updateSelectInput(session,"carco_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"carc_rel_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"carc_table_year",choices = seq(min(temp_data$year),max(temp_data$year)))
+    updateSelectInput(session,"comparison_table_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"inter_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"inter_glm_year",choices = seq(min(temp_data$year),max(temp_data$year)))
     updateSelectInput(session,"year_frame",choices = seq(min(temp_data$year),max(temp_data$year)))
@@ -498,6 +508,11 @@ server<-function(input, output, session) {
     cnt_list<-1
     cnt<-1
     
+    # Some candidates do not have a support document which makes it not able to identify if several entries are just sub-entries of 
+    # one over-entry since all the sub-entry have the same support document. Instead if there are several sequential entries withouth support
+    # document they are assumed to be sub-entries of one over-entry
+    candidate_list$support_document[which(is.na(candidate_list$support_document))] <- "SVHC entries without support document"
+    
     for (i in 2:length(candidate_list$substance_name)){
       if (candidate_list$support_document[i]==candidate_list$support_document[i-1]){
         cnt_list<-c(cnt_list,cnt)
@@ -638,13 +653,13 @@ server<-function(input, output, session) {
       spin_data() %>%
         distinct(year,country,cas_no,.keep_all = T)
     } else if (input$type_frame=="SVHC"){
-      join2<-spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+      join2<-spin_data() %>% 
         distinct(cas_no,year,country,.keep_all = T) %>%
         inner_join(candidate_data(),by="cas_no") %>%
         distinct(cas_no,year,country,.keep_all = T) %>%
         arrange(country,year)
-      #create plot2----
-      join2 %>% #total use per year per country
+
+      join2 %>%
         group_by(year,country) %>%
         summarize(total_amount=sum(amount)) %>%
         ungroup()
@@ -681,7 +696,7 @@ server<-function(input, output, session) {
                    filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
       select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
       mutate(difference=total-comp_total) %>%
-      filter(year>input$normal_rel_year) %>%
+      filter(year==input$compare_rel_year) %>%
       arrange(desc(abs(difference))) %>%
       slice(1:5) %>%
       ungroup() %>%
@@ -723,7 +738,7 @@ server<-function(input, output, session) {
     if (input$carc_table_type=="All"){
       spin_data() %>% 
         distinct(cas_no,year,country,.keep_all = T) %>%
-        filter(year>input$carc_table_year,
+        filter(year==input$comparison_table_year,
                country==input$carc_table_country) %>%
         inner_join(carc$data,by="cas_no") %>%
         select(-name.x) %>%
@@ -1314,7 +1329,7 @@ server<-function(input, output, session) {
                          filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
             select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
             mutate(difference=total-comp_total) %>%
-            filter(year>input$normal_rel_year) %>%
+            filter(year==input$compare_rel_year) %>%
             arrange(desc(abs(difference))) %>%
             slice(1:5) %>%
             ungroup() %>%
@@ -1332,7 +1347,7 @@ server<-function(input, output, session) {
                          filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
             select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
             mutate(difference=total-comp_total) %>%
-            filter(year>input$normal_rel_year) %>%
+            filter(year==input$compare_rel_year) %>%
             arrange(desc(abs(difference))) %>%
             slice(1:5) %>%
             ungroup() %>%
@@ -1422,7 +1437,7 @@ server<-function(input, output, session) {
           if (input$carc_table_type=="All"){
             spin_data() %>% 
               distinct(cas_no,year,country,.keep_all = T) %>%
-              filter(year>input$carc_table_year,
+              filter(year==input$comparison_table_year,
                      country==input$carc_table_country) %>%
               inner_join(carc$data,by="cas_no") %>%
               select(-name.x) %>%
@@ -1446,7 +1461,7 @@ server<-function(input, output, session) {
           } else {
             spin_data() %>% 
               distinct(cas_no,year,country,.keep_all = T) %>%
-              filter(year>input$carc_table_year,
+              filter(year==input$comparison_table_year,
                      country==input$carc_table_country) %>%
               inner_join(carc$data,by="cas_no") %>%
               select(-name.x) %>%
@@ -1475,7 +1490,7 @@ server<-function(input, output, session) {
           if (input$carc_table_type=="All"){
             spin_data() %>% 
               distinct(cas_no,year,country,.keep_all = T) %>%
-              filter(year>input$carc_table_year,
+              filter(year==input$comparison_table_year,
                      country==input$carc_table_country) %>%
               inner_join(carc$data,by="cas_no") %>%
               select(-name.x) %>%
@@ -1499,7 +1514,7 @@ server<-function(input, output, session) {
           } else {
             spin_data() %>% 
               distinct(cas_no,year,country,.keep_all = T) %>%
-              filter(year>input$carc_table_year,
+              filter(year==input$comparison_table_year,
                      country==input$carc_table_country) %>%
               inner_join(carc$data,by="cas_no") %>%
               select(-name.x) %>%
