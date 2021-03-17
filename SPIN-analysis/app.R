@@ -72,8 +72,8 @@ ui<-dashboardPage(
                                               selected = 2000),
                                   selectInput(inputId = "type",label = strong("Type"),choices = c("SVHC","All","Cas")),
                                   conditionalPanel("input.type=='Cas'",textInput(inputId = "cas",strong("Enter Cas-number"),placeholder = "50-00-0")),
-                                  checkboxInput(inputId = "glm","lm"),
-                                  conditionalPanel("input.glm==true",selectInput(inputId = "glm_year",label = "lm since",choices = seq(2000,2017))),
+                                  checkboxInput(inputId = "glm","Lm"),
+                                  conditionalPanel("input.glm==true",selectInput(inputId = "glm_year",label = "Lm since",choices = seq(2000,2017))),
                                   colourInput(inputId = "col_first",label = strong("Colour for plot"),value = "#91CFEE")),
                            column(5,downloadButton("downloadplot","Download Plot")),
                            column(5,downloadButton("downloadplot_back","Download Data"))),
@@ -81,7 +81,8 @@ ui<-dashboardPage(
               fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "normal_country",label = strong("Country"),choices = c("SE","DK","FI","NO")),
                                                                selectInput(inputId = "normal_year",label = strong("Reference Year"),choices = seq(2000,2017))),
                            column(5,downloadButton("downloadnormalrel","Download Plot")),
-                           column(5,downloadButton("downloadnormalrel_back","Download Data"))),
+                           column(5,downloadButton("downloadnormalrel_back","Download Data")),
+                           column(12,br(),helpText("For the year 2000 there is no data for Finland which is acknowledged as 0 tonnes of chemicals. Therefore, the relative chemical production in finland with the reference year 2000 is infinite big"))),
                        box(width = 7,column(12,plotOutput(outputId = "normal_rel_plot")))),
               fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "normal_rel_country",label = strong("Country"),choices = c("SE","NO","DK","FI")),
                                                                selectInput(inputId = "normal_rel_year",label = strong("Reference Year"),choices = seq(2000,2017)),
@@ -102,13 +103,13 @@ ui<-dashboardPage(
               fluidRow(box(title = "Controls",width = 4,column(9,selectInput(inputId = "time_year",label = "Years since",choices = seq(as.Date(ISOdate(2000,1,1)),as.Date(ISOdate(2017,1,1)),"years")),
                                                                checkboxInput(inputId = "single_country","Single country"),
                                                                conditionalPanel("input.single_country==true",selectInput(inputId = "country_choice",label = strong("Country"),choices = c("SE","NO","DK","FI"))),
-                                                               checkboxInput(inputId = "time_glm","lm"),
-                                                               conditionalPanel("input.time_glm==true",selectInput(inputId = "time_glm_year",label = "lm since",choices = seq(as.Date(ISOdate(2000,1,1)),as.Date(ISOdate(2017,1,1)),"years"))),
+                                                               checkboxInput(inputId = "time_glm","Lm"),
+                                                               conditionalPanel("input.time_glm==true",selectInput(inputId = "time_glm_year",label = "Lm since",choices = seq(as.Date(ISOdate(2000,1,1)),as.Date(ISOdate(2017,1,1)),"years"))),
                                                                textInput(inputId = "time_cas",strong("Enter Cas-number"),placeholder = "50-00-0",value = "50-00-0")),
                            column(5,downloadButton("downloadtimeline","Download Plot")),
                            column(5,downloadButton("downloadtimeline_back","Download Data")),
                            br(),
-                           column(12,helpText("The data from SPIN is just given as years. For this plot the data for every year was plotted at the first of January."))),
+                           column(12,br(),helpText("The data from SPIN is just given as years. For this plot the data for every year was plotted at the first of January (DOI = Date of inclusion, LAD = Latest application date, SD = Sunset Date)."))),
                        box(width = 7,column(12,plotOutput(outputId = "timeline"))))),
       tabItem(tabName = "carco",
               fluidRow(box(width = 6,background = "light-blue",column(12,offset = 1,h2(strong("Trend of Problematic Chemicals"))))),
@@ -156,8 +157,8 @@ ui<-dashboardPage(
                                                 selected = "SE"),
                                   selectInput(inputId = "inter_year",label=strong("Years since"),choices = seq(2000,2017),
                                               selected = 2000),
-                                  checkboxInput(inputId = "inter_glm","lm"),
-                                  conditionalPanel("input.inter_glm==true",selectInput(inputId = "inter_glm_year",label = "lm since",choices = seq(2000,2017))),
+                                  checkboxInput(inputId = "inter_glm","Lm"),
+                                  conditionalPanel("input.inter_glm==true",selectInput(inputId = "inter_glm_year",label = "Lm since",choices = seq(2000,2017))),
                                   colourInput(inputId = "col_second",label = strong("Colour for plot"),value = "#91CFEE")),
                            column(5,downloadButton("downloadinterplot","Download Plot")),
                            column(5,downloadButton("downloadinterplot_back","Download Data"))),
@@ -390,15 +391,15 @@ server<-function(input, output, session) {
                    filter(country==input$normal_rel_country) %>%
                    filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
       select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
-      mutate(Difference=total-comp_total) %>%
+      mutate(difference=total-comp_total) %>%
       filter(year>input$normal_rel_year) %>%
-      arrange(desc(abs(Difference))) %>%
+      arrange(desc(abs(difference))) %>%
       slice(1:5) %>%
       ungroup() %>%
       left_join(normal_table_data() %>%
                   distinct(name,cas_no) %>%
                   select(name,cas_no),by="cas_no") %>%
-      select(year,country,type=svhc,cas_no,name,Difference)
+      select(year,country,type=svhc,cas_no,name,difference)
   })
   
   output$downloadnormal_rel_table<-downloadHandler(
@@ -422,9 +423,9 @@ server<-function(input, output, session) {
                          filter(country==input$normal_rel_country) %>%
                          filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
             select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
-            mutate(Difference=total-comp_total) %>%
+            mutate(difference=total-comp_total) %>%
             filter(year>input$normal_rel_year) %>%
-            arrange(desc(abs(Difference))) %>%
+            arrange(desc(abs(difference))) %>%
             slice(1:5) %>%
             ungroup() %>%
             rename(current_tonnes=total,reference_tonnes=comp_total),file)
@@ -440,9 +441,9 @@ server<-function(input, output, session) {
                          filter(country==input$normal_rel_country) %>%
                          filter(year==input$normal_rel_year),by=c("cas_no","country","svhc")) %>%
             select(year=year.x,svhc,country,cas_no,-year.y,total=total.x,comp_total=total.y) %>%
-            mutate(Difference=total-comp_total) %>%
+            mutate(difference=total-comp_total) %>%
             filter(year>input$normal_rel_year) %>%
-            arrange(desc(abs(Difference))) %>%
+            arrange(desc(abs(difference))) %>%
             slice(1:5) %>%
             ungroup() %>%
             rename(current_tonnes=total,reference_tonnes=comp_total),file)
@@ -781,13 +782,13 @@ server<-function(input, output, session) {
                      group_by(country,year,cas_no,name=name.y,type) %>%
                      summarize(total=sum(amount)),by=c("country","cas_no","name","type")) %>%
         select(year=year.x,-year.y,total=total.x,total_sum=total.y,type,country,cas_no,name) %>%
-        mutate(Difference=total-total_sum) %>%
+        mutate(difference=total-total_sum) %>%
         ungroup() %>%
         group_by(country,year,type) %>%
-        arrange(desc(abs(Difference))) %>%
+        arrange(desc(abs(difference))) %>%
         slice(1:5) %>%
         ungroup() %>%
-        select(Year=year,Type=type,Cas=cas_no,name,Difference)
+        select(Year=year,Type=type,Cas=cas_no,name,difference)
     } else {
       spin_data() %>% 
         distinct(cas_no,year,country,.keep_all = T) %>%
@@ -808,13 +809,13 @@ server<-function(input, output, session) {
                      group_by(country,year,cas_no,name=name.y,type) %>%
                      summarize(total=sum(amount)),by=c("country","cas_no","name","type")) %>%
         select(year=year.x,-year.y,total=total.x,total_sum=total.y,type,country,cas_no,name) %>%
-        mutate(Difference=total-total_sum) %>%
+        mutate(difference=total-total_sum) %>%
         ungroup() %>%
         group_by(country,year,type) %>%
-        arrange(desc(abs(Difference))) %>%
+        arrange(desc(abs(difference))) %>%
         slice(1:5) %>%
         ungroup() %>%
-        select(Year=year,Type=type,Cas=cas_no,name,Difference)
+        select(Year=year,Type=type,Cas=cas_no,name,difference)
     }
   })
   
@@ -1330,13 +1331,13 @@ server<-function(input, output, session) {
                            group_by(country,year,cas_no,name=name.y,type) %>%
                            summarize(total=sum(amount)),by=c("country","cas_no","name","type")) %>%
               select(year=year.x,-year.y,total=total.x,total_sum=total.y,type,country,cas_no,name) %>%
-              mutate(Difference=total-total_sum) %>%
+              mutate(difference=total-total_sum) %>%
               ungroup() %>%
               group_by(country,year,type) %>%
-              arrange(desc(abs(Difference))) %>%
+              arrange(desc(abs(difference))) %>%
               slice(1:5) %>%
               ungroup() %>%
-              select(Year=year,Type=type,Cas=cas_no,name,Difference)
+              select(Year=year,Type=type,Cas=cas_no,name,difference)
           } else {
             spin_data() %>% 
               distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1356,13 +1357,13 @@ server<-function(input, output, session) {
                            group_by(country,year,cas_no,name=name.y,type) %>%
                            summarize(total=sum(amount)),by=c("country","cas_no","name","type")) %>%
               select(year=year.x,-year.y,total=total.x,total_sum=total.y,type,country,cas_no,name) %>%
-              mutate(Difference=total-total_sum) %>%
+              mutate(difference=total-total_sum) %>%
               ungroup() %>%
               group_by(country,year,type) %>%
-              arrange(desc(abs(Difference))) %>%
+              arrange(desc(abs(difference))) %>%
               slice(1:5) %>%
               ungroup() %>%
-              select(Year=year,Type=type,Cas=cas_no,name,Difference)
+              select(Year=year,Type=type,Cas=cas_no,name,difference)
           }, file)
       } else if (input$carc_table_datatype=="xlsx"){
         write_xlsx(
@@ -1383,13 +1384,13 @@ server<-function(input, output, session) {
                            group_by(country,year,cas_no,name=name.y,type) %>%
                            summarize(total=sum(amount)),by=c("country","cas_no","name","type")) %>%
               select(year=year.x,-year.y,total=total.x,total_sum=total.y,type,country,cas_no,name) %>%
-              mutate(Difference=total-total_sum) %>%
+              mutate(difference=total-total_sum) %>%
               ungroup() %>%
               group_by(country,year,type) %>%
-              arrange(desc(abs(Difference))) %>%
+              arrange(desc(abs(difference))) %>%
               slice(1:5) %>%
               ungroup() %>%
-              select(Year=year,Type=type,Cas=cas_no,name,Difference)
+              select(Year=year,Type=type,Cas=cas_no,name,difference)
           } else {
             spin_data() %>% 
               distinct(cas_no,year,country,.keep_all = T) %>%
@@ -1409,13 +1410,13 @@ server<-function(input, output, session) {
                            group_by(country,year,cas_no,name=name.y,type) %>%
                            summarize(total=sum(amount)),by=c("country","cas_no","name","type")) %>%
               select(year=year.x,-year.y,total=total.x,total_sum=total.y,type,country,cas_no,name) %>%
-              mutate(Difference=total-total_sum) %>%
+              mutate(difference=total-total_sum) %>%
               ungroup() %>%
               group_by(country,year,type) %>%
-              arrange(desc(abs(Difference))) %>%
+              arrange(desc(abs(difference))) %>%
               slice(1:5) %>%
               ungroup() %>%
-              select(Year=year,Type=type,Cas=cas_no,name,Difference)
+              select(Year=year,Type=type,Cas=cas_no,name,difference)
           }, file)
       }
     }
