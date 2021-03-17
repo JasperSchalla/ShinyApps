@@ -23,7 +23,7 @@ ui<-dashboardPage(
     sidebarMenu(
       menuItem("Upload Data",tabName = "data",icon=icon("upload")),
       menuItem("SVHC and Overall Trend",tabName = "trend",icon = icon("chart-bar")),
-      menuItem("Trends without Intermediates",tabName = "intermediate",icon = icon("chart-bar")),
+      menuItem("Trend without Intermediates",tabName = "intermediate",icon = icon("chart-bar")),
       menuItem("Problematic Chemical Trend",tabName = "carco",icon=icon("exclamation")),
       menuItem("Raw Data",tabName = "frame",icon = icon("table")))),
   dashboardBody(
