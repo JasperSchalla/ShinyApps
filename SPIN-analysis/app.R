@@ -23,15 +23,14 @@ ui<-dashboardPage(
     sidebarMenu(
       menuItem("Upload Data",tabName = "data",icon=icon("upload")),
       menuItem("SVHC and Overall Trend",tabName = "trend",icon = icon("chart-bar")),
-      menuItem("Intermediates",tabName = "intermediate",icon = icon("chart-bar")),
+      menuItem("Trends without Intermediates",tabName = "intermediate",icon = icon("chart-bar")),
       menuItem("Problematic Chemical Trend",tabName = "carco",icon=icon("exclamation")),
-      menuItem("Data Frames",tabName = "frame",icon = icon("table")))),
+      menuItem("Raw Data",tabName = "frame",icon = icon("table")))),
   dashboardBody(
     tabItems(
       tabItem(tabName="data",
-              fluidRow(box(h2(strong("Here you can upload the current data to be able to use all the different plotting-functions")),
-                           br(),
-                           p(h2("SPIN data"),
+              fluidRow(box(width=4,column(12,offset=3,h2(strong("Upload Data"))),background = "light-blue")),
+              fluidRow(box(p(h2("SPIN data"),
                              tags$ol(
                                tags$li("Download the current SPIN database (MS Access database with all data) on the",
                                        tags$a(href="http://spin2000.net/?page_id=54","official website")),
@@ -45,8 +44,8 @@ ui<-dashboardPage(
                                                  "INNER JOIN UseT AS u",
                                                  br(),
                                                  "ON u.PID=sp.PID;")),
-                               tags$li("You will get a new data table. Save this query under a appropriate name. You need to export this table. It is important that you export this file as 
-                                 a .txt. When you get in the export menu, it is crucial that you do not maintain the format, otherwise a lot of data will 
+                               tags$li("You will get a new data table. Save this query under a appropriate name and export this table. It is important that you export this file as 
+                                 a .txt. When you get in the export menu it is crucial that you do not maintain the format, otherwise a lot of data will 
                                  be lost"),
                                tags$li("You have to convert the .txt to a .txt.gz since the .txt format is too big to upload. You can do this for example with",tags$a(href="https://www.7-zip.de/","7-Zip")))),
                            p(h2("Candidate-list"),
@@ -62,10 +61,10 @@ ui<-dashboardPage(
               fluidRow(box(width = 12,
                            fileInput(inputId = "svhc",label = strong("Candidate-list"),accept = ".xlsx"))),
               fluidRow(box(width = 12,
-                           fileInput(inputId = "authorisation",label = "Authorisation-List",accept = ".xlsx"))),
+                           fileInput(inputId = "authorisation",label = "Authorisation-list",accept = ".xlsx"))),
               fluidRow(box(title = "Upload Status",width = 4,column(9,tableOutput(outputId = "test"))))),
       tabItem(tabName="trend",
-              fluidRow(column(12,h2("Trend of All, Single and SVHC Substances"))),
+              fluidRow(box(width=6,background = "light-blue",column(12,offset = 1,h2(strong("Trend of All, Single and SVHC Substances"))))),
               fluidRow(box(title="Controls",width = 4,
                            column(9,selectInput(inputId = "countries",label = strong("Country"), choices = c("SE","DK","NO","FI"),
                                                 selected = "SE"),
@@ -112,7 +111,7 @@ ui<-dashboardPage(
                            column(12,helpText("The data from SPIN is just given as years. For this plot the data for every year was plotted at the first of January."))),
                        box(width = 7,column(12,plotOutput(outputId = "timeline"))))),
       tabItem(tabName = "carco",
-              fluidRow(column(12,h2("Trend of Problematic Chemicals"))),
+              fluidRow(box(width = 6,background = "light-blue",column(12,offset = 1,h2(strong("Trend of Problematic Chemicals"))))),
               fluidRow(box(width = 4,column(9,textInput(inputId = "add_cas",label = strong("Add Cas-number"),value = "50-00-0",placeholder = "50-00-0"),
                                             selectInput(inputId = "add_type",label = strong("Add to which type"),choices =c("carcinogenic","equivalent concern","mutagenic","PBT/vPVB","toxic for reproduction")),
                                             actionButton(inputId = "add_action","Add"),
@@ -143,7 +142,7 @@ ui<-dashboardPage(
                                                                downloadButton("downloadcarctable","Download Table"))),
                        box(width = 7,column(12,p("In this table the five biggest differences to a reference year in tonnes per annum and per type of chemicals are displayed."),br(),dataTableOutput(outputId = "carctable"))))),
       tabItem(tabName = "intermediate",
-              fluidRow(column(12,h2("Trend of SVHCs without Intermediates"))),
+              fluidRow(box(width = 6,background = "light-blue",column(12,offset=1,h2(strong("Trend of SVHCs without Intermediates"))))),
               fluidRow(box(width = 4,column(9,textInput(inputId = "inter_cas",label = strong("Add Cas-number"),value = "50-00-0",placeholder = "50-00-0"),
                                             actionButton(inputId = "inter_action","Add"),
                                             actionButton(inputId = "inter_remove","Remove"),
@@ -151,9 +150,7 @@ ui<-dashboardPage(
                                             radioButtons(inputId = "inter_datatype",label = strong("File Type"),choices = c("csv","xlsx")),
                                             downloadButton("downloadintertable","Download Table"))),
                        box(width=7,column(12,p("The substances you see in the table are the substances which are classified as intermediates. These get not plotted in the following plot. You can add Cas-numbers."),
-                                          dataTableOutput(outputId = "inter_tab"))),
-                       box(width=7,column(12,p("Test"),
-                                          tableOutput(outputId = "debug")))),
+                                          dataTableOutput(outputId = "inter_tab")))),
               fluidRow(box(title="Controls",width = 4,
                            column(9,selectInput(inputId = "inter_countries",label = strong("Country"), choices = c("SE","DK","NO","FI"),
                                                 selected = "SE"),
@@ -166,6 +163,8 @@ ui<-dashboardPage(
                            column(5,downloadButton("downloadinterplot_back","Download Data"))),
                        box(width = 7,column(plotOutput(outputId = "interplot"),width = 12)))),
       tabItem(tabName = "frame",
+              fluidRow(box(width = 4,background = "light-blue",column(12,offset = 3,h2(strong("Raw Data"))))),
+              fluidRow(column(12,p())),
               fluidRow(box(title = "Controls",width = 3,column(9,selectInput(inputId = "dataframe",label = strong("Select Data Frame"),choices = c("Raw","Total")),
                                                                selectInput(inputId = "country_frame",label = strong("Country"),choices = c("SE","NO","FI","DK","Nordic")),
                                                                selectInput(inputId = "year_frame",label = strong("Years since"),seq(2000,2017)),
@@ -346,6 +345,9 @@ server<-function(input, output, session) {
   )
   
   output$inter_tab<-renderDataTable({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table is shown")
+    )
     if (input$inter_action==0 & input$inter_remove==0){
       init_inter
     } else {
@@ -354,6 +356,9 @@ server<-function(input, output, session) {
   })
   
   output$carc_tab<-renderDataTable({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table is shown")
+    )
     if (input$add_action==0 & input$add_remove==0){
       init_carc
     } else {
@@ -372,6 +377,9 @@ server<-function(input, output, session) {
   })
   
   output$normal_table<-renderDataTable({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
+    )
     normal_table_data() %>%
       group_by(country,year,svhc,cas_no) %>%
       summarize(total=sum(amount)) %>%
@@ -471,6 +479,9 @@ server<-function(input, output, session) {
   
   
   output$normal_rel_plot<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
     normal_rel_data() %>%
       select(-all,-svhc,-svhc_amount,SVHC=verg_svhc,Normal=verg_normal) %>%
       gather(Type,value,-country,-year) %>%
@@ -681,19 +692,13 @@ server<-function(input, output, session) {
   })
   
   output$debug<-renderTable({
-    
-    print(ncol(time_data()))
-    str(time_data(),max.level = 2)
-    
   })
   
   output$test<-renderText({
-    out<-try(ncol(time_data()),silent = T)
-    if (length(out)>1){
-      "Succesful Upload of all files"
-    } else {
-      "Unsuccesful Upload of all files"
-    }
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"Unsuccesful upload of all files")
+    )
+    "Succesful upload of all files"
   })
   
   auth_data<-reactive({
@@ -755,6 +760,9 @@ server<-function(input, output, session) {
   })
   
   output$carctable<-renderDataTable({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
+    )
     if (input$carc_table_type=="All"){
       spin_data() %>% 
         distinct(cas_no,year,country,.keep_all = T) %>%
@@ -811,6 +819,9 @@ server<-function(input, output, session) {
   })
   
   output$carc_rel_plot<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
     if (input$carc_rel_type=="All"){
       ggplot(carc_rel_data(),aes(year,rela,fill=type))+
         geom_col(position = position_dodge(width=0.5),width=0.5)+
@@ -831,6 +842,9 @@ server<-function(input, output, session) {
   })
   
   output$carcino<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
     if(input$carco_type=="All"){
       carc_data() %>%
         ggplot(aes(year,total_amount,fill=type))+
@@ -853,6 +867,9 @@ server<-function(input, output, session) {
   })
   
   output$timeline<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
     if(input$single_country){
       
       Basis<-time_data() %>%
@@ -917,6 +934,9 @@ server<-function(input, output, session) {
   })
   
   output$table<-renderDataTable({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
+    )
     if (input$country_frame!="Nordic"){
       if (input$dataframe=="Raw"){
         if (input$type_frame=="All"){
@@ -1131,6 +1151,9 @@ server<-function(input, output, session) {
   })
   
   output$pie<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
     SPIN<-round((sum((unique(candidate_data()$cas_no) %in% spin_data()$cas_no))-4)/(length(unique(candidate_data()$cas_no))-6),2)*100
     n_SPIN<-round(((length(unique(candidate_data()$cas_no))-6)-(sum((unique(candidate_data()$cas_no) %in% spin_data()$cas_no))-4))/(length(unique(candidate_data()$cas_no))-6),2)*100
     name<-c(paste0(SPIN,"%"),paste0(n_SPIN,"%"))
@@ -1141,6 +1164,9 @@ server<-function(input, output, session) {
   })
   
   output$interplot<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
     basis<-join_data() %>% 
       anti_join(inter$data,by="cas_no") %>%
       group_by(year,country) %>%
@@ -1165,6 +1191,9 @@ server<-function(input, output, session) {
   })
   
   output$barplot<-renderPlot({
+    shiny::validate(
+      need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the plot can be generated")
+    )
     if (input$type=="SVHC"){
       basis<-plot3_data() %>%
         filter(country==input$countries) %>%
