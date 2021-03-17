@@ -18,10 +18,14 @@ Since there is a lot of data in the database it can take some times to generate 
 
 Here are some examples for possible plots which can be generated:
 
-<img src="/SPIN-analysis/example_plots/spin_trend.png" width="400" height="400"/>
-<img src="/SPIN-analysis/example_plots/spin_rel_trend.png"/>
-<img src="/SPIN-analysis/example_plots/spin_prob_trend.png"/>
-<img src="/SPIN-analysis/example_plots/spin_rel_prob_trend.png"/>
-<img src="/SPIN-analysis/example_plots/spin_timeline.png"/>
+<p float="left">
+<img src="/SPIN-analysis/example_plots/spin_trend.png" width="500" height="400"/>
+<img src="/SPIN-analysis/example_plots/spin_rel_trend.png" width="500" height="400"/>
+</p>
+<p float="left">
+<img src="/SPIN-analysis/example_plots/spin_prob_trend.png" width="500" height="400"/>
+<img src="/SPIN-analysis/example_plots/spin_rel_prob_trend.png" width="500" height="400"/>
+</p>
+<img src="/SPIN-analysis/example_plots/spin_timeline.png"/,width="800",height="450">
 
 
