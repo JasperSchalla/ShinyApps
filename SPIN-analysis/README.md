@@ -18,6 +18,10 @@ Since there is a lot of data in the database it can take some times to generate 
 
 Here are some examples for possible plots which can be generated:
 
-
+![Trend of the overall chemical production in Sweden](https://github.com/JasperSchalla/ShinyApps/SPIN-analysis/example_plots/spin_trend.png)
+![Relative trend of the overall chemical and SVHC production in Sweden](https://github.com/JasperSchalla/ShinyApps/SPIN-analysis/example_plots/spin_rel_trend.png)
+![Trend of the problematic chemical production in Sweden](https://github.com/JasperSchalla/ShinyApps/SPIN-analysis/example_plots/spin_prob_trend.png)
+![Relative trend of the problematic chemical production in Sweden](https://github.com/JasperSchalla/ShinyApps/SPIN-analysis/example_plots/spin_rel_prob_trend.png)
+![Trend of one example SVHC in Sweden in Sweden](https://github.com/JasperSchalla/ShinyApps/SPIN-analysis/example_plots/spin_timeline.png)
 
 
