@@ -27,7 +27,7 @@ Here are some examples for possible plots which can be generated:
 <img src="/SPIN-analysis/example_plots/spin_rel_pob_trend.png" width="500" height="400"/>
 </p>
 <p align="center">
-<img src="/SPIN-analysis/example_plots/spin_timeline.png" width="500" height="400"/>
+<img src="/SPIN-analysis/example_plots/spin_timeline.png" width="600" height="400"/>
 </p>
 
 
