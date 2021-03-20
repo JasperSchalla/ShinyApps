@@ -222,7 +222,7 @@ ui<-dashboardPage(
               fluidRow(box(width = 4,background = "light-blue",column(12,offset = 3,h2(strong("Complete Data"))))),
               fluidRow(column(12,p())),
               fluidRow(box(title = "Controls",width = 3,column(9,selectInput(inputId = "dataframe",label = strong("Select Data Frame"),
-                                                                             choices = c("Raw","Total")),
+                                                                             choices = c("Complete","Total")),
                                                                selectInput(inputId = "country_frame",label = strong("Country"),
                                                                            choices = c("SE","NO","FI","DK","Nordic")),
                                                                selectInput(inputId = "year_frame",label = strong("Years Since"),
@@ -234,7 +234,7 @@ ui<-dashboardPage(
                                                                            label = strong("Type")),
                                                                conditionalPanel("input.type_frame=='Cas'",textInput(inputId = "cas_frame",
                                                                                                                     strong("Enter Cas-number"),placeholder = "50-00-0")),
-                                                               conditionalPanel("input.type_frame=='SVHC' & input.dataframe=='Raw'",
+                                                               conditionalPanel("input.type_frame=='SVHC' & input.dataframe=='Complete'",
                                                                                 checkboxInput(inputId = "group","Grouped")),
                                                                radioButtons(inputId = "frame_datatype",label = strong("File Type"),
                                                                             choices = c("csv","xlsx")),
@@ -500,7 +500,7 @@ server<-function(input, output, session) {
       separate_rows(cas_no,sep = ", ")
   })
   
-  # Clean the SPIN data for the download of the raw data
+  # Clean the SPIN data for the download of the complete data
   grouped_data<-reactive({
     input_file2<-input$svhc
     candidate_list<-read_xlsx(input_file2$datapath,skip=3) %>%
@@ -796,7 +796,7 @@ server<-function(input, output, session) {
       need((input$spin!="" & input$svhc!="" & input$authorisation!=""),"All files need to be uploaded before the table can be generated")
     )
     if (input$country_frame!="Nordic"){
-      if (input$dataframe=="Raw"){
+      if (input$dataframe=="Complete"){
         if (input$type_frame=="All"){
           if (input$year_filter){
             spin_data() %>%
@@ -906,7 +906,7 @@ server<-function(input, output, session) {
         }
       }
     } else if (input$country_frame=="Nordic"){
-      if (input$dataframe=="Raw"){
+      if (input$dataframe=="Complete"){
         if (input$type_frame=="All"){
           if (input$year_filter){
             spin_data() %>%
@@ -1769,7 +1769,7 @@ server<-function(input, output, session) {
       if (input$frame_datatype=="csv"){
         write.csv(
           if (input$country_frame!="Nordic"){
-            if (input$dataframe=="Raw"){
+            if (input$dataframe=="Complete"){
               if (input$type_frame=="All"){
                 if (input$year_filter){
                   spin_data() %>%
@@ -1879,7 +1879,7 @@ server<-function(input, output, session) {
               }
             }
           } else if (input$country_frame=="Nordic"){
-            if (input$dataframe=="Raw"){
+            if (input$dataframe=="Complete"){
               if (input$type_frame=="All"){
                 if (input$year_filter){
                   spin_data() %>%
@@ -1982,7 +1982,7 @@ server<-function(input, output, session) {
       } else if (input$frame_datatype=="xlsx"){
         write_xlsx(
           if (input$country_frame!="Nordic"){
-            if (input$dataframe=="Raw"){
+            if (input$dataframe=="Complete"){
               if (input$type_frame=="All"){
                 if (input$year_filter){
                   spin_data() %>%
@@ -2091,7 +2091,7 @@ server<-function(input, output, session) {
               }
             }
           } else if (input$country_frame=="Nordic"){
-            if (input$dataframe=="Raw"){
+            if (input$dataframe=="Complete"){
               if (input$type_frame=="All"){
                 if (input$year_filter){
                   spin_data() %>%
