@@ -18,6 +18,7 @@ library(writexl)
 library(readxl)
 library(colourpicker)
 library(mapview)
+library(labelled)
 webshot::install_phantomjs()
 
 
@@ -31,8 +32,8 @@ ui <- dashboardPage(
   dashboardBody(
     tabItems(
       tabItem(tabName = "Upload_Data",
-              fluidRow(box(width=12,h2(strong("Here you can upload the Data to use the functions of this application")),
-                           h3(strong("Where to download the data from")),
+              fluidRow(box(width=3,background = "light-blue",column(12,offset = 2,h2(strong("Upload Data")))),
+                       box(width = 12,h3(strong("Where to download the data from")),
                            p("You can download the data on the official",tags$a(href="https://ec.europa.eu/eurostat/de/web/prodcom/data/database","Eurostat website")),
                            h3(strong("Total production data")),
                            p("You need the data for the total prodcution in the spss format"))),
@@ -42,6 +43,9 @@ ui <- dashboardPage(
                            dataTableOutput("list"),
                            br(),
                            numericInput("code",label = strong("Codes to Add"),value = 20141353),
+                           textOutput("extra_info"),
+                           tags$head(tags$style("#extra_info{color:red}")),
+                           br(),
                            actionButton("add","Add"),
                            actionButton("remove","Remove"),
                            actionButton("remove_all","Reset"))),
@@ -49,6 +53,7 @@ ui <- dashboardPage(
                            br(),
                            fileInput("upload_codes",label = strong("Codes"),accept = ".xlsx")))),
       tabItem(tabName="eu_plot",
+              fluidRow(box(width = 3,background = "light-blue",column(12,offset = 3,h2(strong("EU Plots"))))),
               fluidRow(box(title = "Controls",width = 3,
                            selectInput("eu",label = strong("EU Countries"),choices = c("EU27TOTALS_2007","EU27TOTALS_2020","EUROPEAN UNION (28)")),
                            selectInput("eu_years",label = strong("Years Since"),choices = seq(as.Date(ISOdate(2008,1,1)),as.Date(ISOdate(2018,1,1)),"years")),
@@ -92,22 +97,33 @@ server <- function(input, output, session) {
     input_data<-input$sav
     dataset<-read_sav(input_data$datapath) %>%
       clean_names()
-    
+
     dataset<-dataset %>%
       mutate_at(vars(indicators,decl,period,flags_footnotes),as_factor) %>%
-      extract(period,"year",regex = "(\\d{4})",remove = T) 
-    
+      extract(period,"year",regex = "(\\d{4})",remove = T)
+
     dataset$year<-as.Date(ISOdate(dataset$year,1,1))
-    
-    dataset %>%
+    dataset <- dataset %>%
       filter(indicators=="PRODQNT",
              value!=":") %>%
-      mutate(value=as.numeric(value)/1000)
+      mutate(value=as.character(as_factor(value))) %>%
+      mutate(value=as.numeric(value)/1000,
+             temp_filt=prccode)
+    
+    val_labels(dataset$temp_filt) <- NULL
+    dataset %>%
+      mutate(temp_filt=as.numeric(temp_filt))
+    
   })
   
   
-  init_codes<-data.frame("Prccode"=20135125,"Name"="Chromates and dichromates; peroxochromates") 
+  init_codes<-data.frame("Prccode"=20135125,"Name"="Chromates and dichromates; peroxochromates")
   prcodes<-reactiveValues(codes=init_codes)
+  
+  info_text <- reactiveValues(text="")
+  
+  output$debug <- renderTable({
+  })
   
   observeEvent(input$sav,{
     slice_index<-NULL
@@ -118,18 +134,18 @@ server <- function(input, output, session) {
         print(glue::glue("Element number {i} is not a real code"))
       }
     }
-    
+
     if (length(slice_index!=0)){
       temp_data<-prcodes$codes %>%
         slice(-slice_index) %>%
-        select(-Name) 
+        select(-Name)
       prcodes$codes<-temp_data %>%
-        add_column(Name=sapply(temp_data$Prccode,function(x) unique(eu_data() %>% filter(prccode==x) %>% mutate(prccode=as_factor(prccode)) %>% pull(prccode))))
-      
+        add_column(Name=sapply(temp_data$Prccode,function(x) unique(eu_data() %>% filter(temp_filt==x) %>% mutate(prccode=as_factor(prccode)) %>% pull(prccode))))
+
     } else {
       prcodes$codes<-prcodes$codes %>%
         select(-Name) %>%
-        add_column(Name=sapply(prcodes$codes$Prccode,function(x) unique(eu_data() %>% filter(prccode==x) %>% mutate(prccode=as_factor(prccode)) %>% pull(prccode))))
+        add_column(Name=sapply(prcodes$codes$Prccode,function(x) unique(eu_data() %>% filter(temp_filt==x) %>% mutate(prccode=as_factor(prccode)) %>% pull(prccode))))
     }
   })
   
@@ -146,37 +162,53 @@ server <- function(input, output, session) {
     } else {
       data<-read_xlsx(input_upload$datapath)
       prcodes$codes<-data.frame("Prccode"=data$Code) %>%
-        add_column(Name=sapply(data$Code,function(x) unique(eu_data() %>% filter(prccode==x) %>% mutate(prccode=as_factor(prccode)) %>% pull(prccode))))
+        add_column(Name=sapply(data$Code,function(x) unique(eu_data() %>% filter(temp_filt==x) %>% mutate(prccode=as_factor(prccode)) %>% pull(prccode))))
     }
   })
   
   observeEvent(input$add,{
     input_data3<-input$sav
     if (is.null(input_data3)){
-      prcodes$codes<-prcodes$codes %>%
-        add_row(Prccode=input$code,Name="Can not be assigned yet - upload the data")
-    } else {
-      if (!(input$code %in% eu_data()$prccode)){
-        print("Not in list")
+      if (input$code %in% prcodes$codes$Prccode){
+        info_text$text <- "Already in the list"
       } else {
         prcodes$codes<-prcodes$codes %>%
-          add_row(Prccode=input$code,Name=unique(eu_data() %>% filter(prccode==input$code) %>% mutate(prccode=as_factor(prccode)) %>% pull(prccode)))
+          add_row(Prccode=input$code,Name="Can not be assigned yet - upload the data")
+        info_text$text <- ""
+      }
+    } else {
+      if (!(input$code %in% eu_data()$prccode)){
+        info_text$text <- "Not in the list" 
+      } else {
+        if (input$code %in% prcodes$codes$Prccode){
+          info_text$text <- "Already in the list"
+        } else {
+          prcodes$codes<-prcodes$codes %>%
+            add_row(Prccode=input$code,Name=unique(eu_data() %>% filter(temp_filt==input$code) %>% mutate(prccode=as_factor(prccode)) %>% pull(prccode)))
+          info_text$text <- ""
+        }
       }
     }
   })
   
+  
   observeEvent(input$remove,{
     if (!(input$code %in% prcodes$codes$Prccode)){
-      print("Not in list")
+      info_text$text <- "Not in the list" 
     } else {
       prcodes$codes<-prcodes$codes%>%
         slice(-which(prcodes$codes$Prccode==input$code))
+      info_text$text <- ""
     }
     
   })
   
   output$list<-renderDataTable({
     prcodes$codes
+  })
+  
+  output$extra_info <- renderText({
+    info_text$text
   })
   
   coords2country<-function(points)
@@ -205,32 +237,32 @@ server <- function(input, output, session) {
     }
     dataset<-read_sav(input_data$datapath) %>%
       clean_names()
-    
+
     dataset<-dataset %>%
       mutate_at(vars(indicators,decl,period,flags_footnotes),as_factor) %>%
-      extract(period,"year",regex = "(\\d{4})",remove = T) 
-    
+      extract(period,"year",regex = "(\\d{4})",remove = T)
+
     dataset$year<-as.Date(ISOdate(dataset$year,1,1))
-    
-    dataset<-dataset %>%
+    dataset %>%
       filter(indicators=="PRODQNT",
              value!=":") %>%
+      mutate(value=as.character(as_factor(value))) %>%
       mutate(value=as.numeric(value)/1000)
-    
+
     if(input$eu_grouped){
       dataset1<-dataset %>%
         filter(prccode==input$substance_eu)
     } else {
       dataset1<-dataset
     }
-    
+
     if(input$box_grouped){
       dataset2<-dataset %>%
         filter(prccode==input$substance_box)
     } else {
       dataset2<-dataset
     }
-    
+
     updateSelectInput(session,"eu_years",choices = seq(min(dataset1$year),max(dataset1$year),"years"))
     updateSelectInput(session,"box_year",choices = seq(min(dataset2$year),max(dataset2$year),"years"))
   })
@@ -295,6 +327,12 @@ server <- function(input, output, session) {
   })
   
   output$country_plot<-renderPlot({
+    shiny::validate(
+      need(input$sav!="","Upload the file containing the total production")
+    )
+    shiny::validate(
+      need(input$map_shape_click!="","Klick on a country to display the production")
+    )
     if (input$plot_grouped){
       verg<-eu_data() %>%
         filter(prccode %in% prcodes$codes$Prccode) %>%
@@ -425,6 +463,9 @@ server <- function(input, output, session) {
   )
   
   output$boxplot<-renderPlot({
+    shiny::validate(
+      need(input$sav!="","Upload the file containing the total production")
+    )
     if (input$eu_grouped){
       eu_data() %>%
         filter(decl==input$eu) %>%
@@ -539,6 +580,9 @@ server <- function(input, output, session) {
   
   
   output$real_box<-renderPlot({
+    shiny::validate(
+      need(input$sav!="","Upload the file containing the total production")
+    )
     if (input$box_grouped){
       if (input$single_year){
         eu_data() %>%

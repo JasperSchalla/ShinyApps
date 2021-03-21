@@ -142,6 +142,9 @@ ui<-dashboardPage(
               fluidRow(box(width = 4,column(9,textInput(inputId = "add_cas",label = strong("Add Cas-number"),value = "50-00-0",placeholder = "50-00-0"),
                                             selectInput(inputId = "add_type",label = strong("Add to which type"),choices =c("carcinogenic","equivalent concern",
                                                                                                                             "mutagenic","PBT/vPVB","toxic for reproduction")),
+                                            textOutput(outputId = "extra_info_prob"),
+                                            tags$head(tags$style("#extra_info_prob{color:red}")),
+                                            br(),
                                             actionButton(inputId = "add_action","Add"),
                                             actionButton(inputId = "add_remove","Remove"),
                                             p(br()),
@@ -197,6 +200,9 @@ ui<-dashboardPage(
               fluidRow(box(width = 5,background = "light-blue",column(12,offset=1,h2(strong("Trend without Intermediates")))),
                        column(12,h2("Trend of SVHCs without Intermediates"))),
               fluidRow(box(width = 4,column(9,textInput(inputId = "inter_cas",label = strong("Add Cas-number"),value = "50-00-0",placeholder = "50-00-0"),
+                                            textOutput("extra_info_inter"),
+                                            tags$head(tags$style("#extra_info_inter{color:red}")),
+                                            br(),
                                             actionButton(inputId = "inter_action","Add"),
                                             actionButton(inputId = "inter_remove","Remove"),
                                             p(br()),
@@ -311,15 +317,19 @@ server<-function(input, output, session) {
   # Make the list reactive
   inter<-reactiveValues(data=init_inter)
   
+  # Make the help text for intermediate list
+  infotext_inter <- reactiveValues(text="")
+  
+  # Make the help text for problematic chemical list
+  infotext_prob <- reactiveValues(text="")
+  
   # Remove chemicals from the list with problematic chemicals
   observeEvent(input$add_remove,{
-    if (length(spin_data() %>%
-               distinct(cas_no,year,country,.keep_all = T) %>%
-               filter(cas_no==input$add_cas) %>%
-               pull(name))==0){
-      print(glue::glue("There is no Cas-number: {input$add_cas}"))
+    if (!input$add_cas %in% (pull(filter(carc$data,type==input$add_type),cas_no))){
+      infotext_prob$text <- "This cas-number is not in the list. Check if you seletec the right type"
     } else {
       carc$data<-carc$data[-which(carc$data$cas_no==input$add_cas & carc$data$type==input$add_type),]
+      infotext_prob$text <- ""
     }
   })
   
@@ -329,20 +339,30 @@ server<-function(input, output, session) {
                distinct(cas_no,year,country,.keep_all = T) %>%
                filter(cas_no==input$add_cas) %>%
                pull(name))==0){
-      print(glue::glue("There is no Cas-number: {input$add_cas}"))
+      infotext_prob$text <- "This Cas-number cannot be found in SPIN"
     } else {
-      carc$data<-carc$data %>%
-        add_row(name=unique(spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
-                              distinct(cas_no,year,country,.keep_all = T) %>%
-                              filter(cas_no==input$add_cas) %>%
-                              pull(name)),type=input$add_type,cas_no=input$add_cas)
+      if (!input$add_cas %in% (pull(filter(carc$data,type==input$add_type),cas_no))){
+        carc$data<-carc$data %>%
+          add_row(name=unique(spin_data() %>% #pick only cas which are in svhc list (in new_candidates) and distinct since every cas has a few names
+                                distinct(cas_no,year,country,.keep_all = T) %>%
+                                filter(cas_no==input$add_cas) %>%
+                                pull(name)),type=input$add_type,cas_no=input$add_cas)
+        infotext_prob$text <- "" 
+      } else {
+        infotext_prob$text <- "The Cas-number is already in the list"
+      }
     }
   })
   
   # Remove chemicals from the list with SVHC which can be considered as intermediates
   observeEvent(input$inter_remove,{
-    inter$data<-inter$data %>%
-      filter(cas_no!=input$inter_cas)
+    if (!input$inter_cas %in% inter$data$cas_no){
+      infotext_inter$text <- "This Cas-number is not in the list"
+    } else {
+      inter$data<-inter$data %>%
+        filter(cas_no!=input$inter_cas) 
+      infotext_inter$text <- ""
+    }
   })
   
   # Add chemicals to the list with SVHC which can be considered as intermediates
@@ -351,13 +371,18 @@ server<-function(input, output, session) {
                distinct(cas_no,year,country,.keep_all = T) %>%
                filter(cas_no==input$inter_cas) %>%
                pull(name))==0){
-      print(glue::glue("There is no Cas-number: {input$inter_cas}"))
+      infotext_inter$text <- "This Cas-number cannot be found in SPIN"
     } else {
-      inter$data<-inter$data %>%
-        add_row(name=unique(spin_data() %>%
-                              distinct(cas_no,year,country,.keep_all = T) %>%
-                              filter(cas_no==input$inter_cas) %>%
-                              pull(name)),cas_no=input$inter_cas)
+      if (!input$inter_cas %in% inter$data$cas_no){
+        inter$data<-inter$data %>%
+          add_row(name=unique(spin_data() %>%
+                                distinct(cas_no,year,country,.keep_all = T) %>%
+                                filter(cas_no==input$inter_cas) %>%
+                                pull(name)),cas_no=input$inter_cas)
+        infotext_inter$text <- "" 
+      } else {
+        infotext_inter$text <- "This Cas-number is already in the list"
+      }
     }
   })
   
@@ -462,7 +487,7 @@ server<-function(input, output, session) {
         inner_join(carc$data,by="cas_no") %>% 
         group_by(year,type) %>%
         summarize(total=sum(amount)) %>%
-        group_by(type,add = T) 
+        group_by(type,.add = T) 
       
       rel_se %>%
         add_column(compared=rep(rel_se$total[1:5],times=length(rel_se$total)/5)) %>%
@@ -475,7 +500,7 @@ server<-function(input, output, session) {
         inner_join(carc$data,by="cas_no") %>%
         group_by(year,type) %>%
         summarize(total=sum(amount)) %>%
-        group_by(type,add = T) 
+        group_by(type,.add = T) 
       
       rel_se %>%
         add_column(compared=rep(rel_se$total[1:5],times=length(rel_se$total)/5)) %>%
@@ -620,12 +645,12 @@ server<-function(input, output, session) {
   # Clean SPIN data for the trend of single chemicals
   time_data<-reactive({
     spin_data() %>%
-      mutate(year=as.Date(ISOdate(year,1,1))) %>%
-      left_join(candidate_data(),by="cas_no") %>%
-      select(-Stoffname) %>%
-      left_join(auth_data(),by="cas_no") %>%
-      select(name,cas_no,country,year,amount,Datum,sunset_date,latest_application_date) %>%
-      distinct(cas_no,country,year,.keep_all = T)
+        mutate(year=as.Date(ISOdate(year,1,1))) %>%
+        left_join(candidate_data(),by="cas_no") %>%
+        select(-Stoffname) %>%
+        left_join(auth_data(),by="cas_no") %>%
+        select(name,cas_no,country,year,amount,Datum,sunset_date,latest_application_date) %>%
+        distinct(cas_no,country,year,.keep_all = T)
   })
   
   # Clean data for some plots
@@ -639,7 +664,7 @@ server<-function(input, output, session) {
         inner_join(candidate_data(),by="cas_no") %>%
         distinct(cas_no,year,country,.keep_all = T) %>%
         arrange(country,year)
-
+      
       join2 %>%
         group_by(year,country) %>%
         summarize(total_amount=sum(amount)) %>%
@@ -658,7 +683,7 @@ server<-function(input, output, session) {
         inner_join(candidate_data(),by="cas_no") %>%
         distinct(cas_no,year,country,.keep_all = T) %>%
         arrange(country,year)
-
+      
       join2 %>%
         group_by(year,country) %>%
         summarize(total_amount=sum(amount)) %>%
@@ -667,6 +692,16 @@ server<-function(input, output, session) {
   })
   
   ## 2.4 Render tables,text and plots
+  
+  # Render text for the intermediate list
+  output$extra_info_inter <- renderText({
+    infotext_inter$text
+  })
+  
+  # Render text for the problematic chemical list
+  output$extra_info_prob <- renderText({
+    infotext_prob$text
+  })
   
   # Potential output for debugging
   output$debug<-renderTable({
@@ -1117,9 +1152,11 @@ server<-function(input, output, session) {
         filter(year>=input$time_year) %>%
         filter(cas_no==input$time_cas)
       
+      
       doi<-data.frame(xmin=Basis$Datum[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
       lad<-data.frame(xmin=Basis$latest_application_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
       sd<-data.frame(xmin=Basis$sunset_date[1],xmax=as.Date("3000-01-01"),ymin=-Inf,ymax=Inf)
+      
       
       time_plot<-ggplot()+
         geom_line(data=Basis,aes(year,amount,col=country))+
