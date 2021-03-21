@@ -326,7 +326,7 @@ server<-function(input, output, session) {
   # Remove chemicals from the list with problematic chemicals
   observeEvent(input$add_remove,{
     if (!input$add_cas %in% (pull(filter(carc$data,type==input$add_type),cas_no))){
-      infotext_prob$text <- "This cas-number is not in the list. Check if you seletec the right type"
+      infotext_prob$text <- "This cas-number is not in the list. Check if you selected the right type"
     } else {
       carc$data<-carc$data[-which(carc$data$cas_no==input$add_cas & carc$data$type==input$add_type),]
       infotext_prob$text <- ""
