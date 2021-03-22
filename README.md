@@ -11,5 +11,5 @@ shiny::runGitHub("ShinyApps", "JasperSchalla", subdir = "SPIN-analysis")
 ```
 
 Or you can clone or download this repository, and use run
-`shiny::runApp("SPIN-analysis")`. Alternatively, [SPIN-analysis](https://umwi.shinyapps.io/SPIN-analysis/) and [PRODCOM-analysis](https://umwi.shinyapps.io/PRODCOM-analysis/) can be run on the shiny server without the need for a local installation of R. However, the memory on the server is limited which can lead in problems with large data amounts.
+`shiny::runApp("SPIN-analysis")`. Alternatively, [SPIN-analysis](https://umwi.shinyapps.io/SPIN-analysis/) and [PRODCOM-analysis](https://umwi.shinyapps.io/PRODCOM-analysis/) can be run on the shiny server without the need for a local installation of R. However, the memory on the server is limited which can lead to problems with large data amounts.
 
