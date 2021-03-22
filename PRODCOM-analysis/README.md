@@ -10,6 +10,10 @@ Where to download the actual data is explained in the app. When problems occur y
 
 Here are some examples for possible plots which can be generated:
 
+<p float="left">
 <img src="/PRODCOM-analysis/example_plots/Europe_plot.png" width="500"/>
-<img src="/PRODCOM-analysis/example_plots/European_union(28)_plot.png.png" width="500"/>
-<img src="/PRODCOM-analysis/example_plots/map_europe.png" width="500"/>
+<img src="/PRODCOM-analysis/example_plots/European_union(28)_plot.png" width="500"/>
+</p>
+<p align="center">
+<img src="/PRODCOM-analysis/example_plots/map_europe.png" width="700"/>
+</p>
