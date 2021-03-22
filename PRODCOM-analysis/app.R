@@ -33,10 +33,9 @@ ui <- dashboardPage(
     tabItems(
       tabItem(tabName = "Upload_Data",
               fluidRow(box(width=3,background = "light-blue",column(12,offset = 2,h2(strong("Upload Data")))),
-                       box(width = 12,h3(strong("Where to download the data from")),
-                           p("You can download the data on the official",tags$a(href="https://ec.europa.eu/eurostat/de/web/prodcom/data/database","Eurostat website")),
-                           h3(strong("Total production data")),
-                           p("You need the data for the total prodcution in the spss format"))),
+                       box(width = 12,h3(strong("PRODCOM")),
+                           p("You can download the total production data from the PRODCOM database on the official",
+                             tags$a(href="https://ec.europa.eu/eurostat/de/web/prodcom/data/database","Eurostat website"),". The file need to be in the sav. format."))),
               fluidRow(box(width=12,fileInput("sav",accept = ".sav",label = strong("Total production data")))),
               fluidRow(box(width = 12,helpText("Here you can add substances based on their prccode, only listed substances can be used. When more than one prccode is in the list and 'Grouped' is selected in the control panel for the plots, the tonnes will be summed up"),
                            br(),
@@ -49,7 +48,7 @@ ui <- dashboardPage(
                            actionButton("add","Add"),
                            actionButton("remove","Remove"),
                            actionButton("remove_all","Reset"))),
-              fluidRow(box(width = 12,helpText("Here you can upload a file when you have too many codes and do not want to enter every single one. Just upload a file in the xlsx format with one column named 'Code'. The current selection will be discarded and the uploaded selection will be used"),
+              fluidRow(box(width = 12,helpText("Here you can upload a file when you have too many codes and do not want to enter every single one. Just upload a file in the .xlsx format with one column named 'Code'. The current selection will be discarded and the uploaded selection will be used"),
                            br(),
                            fileInput("upload_codes",label = strong("Codes"),accept = ".xlsx")))),
       tabItem(tabName="eu_plot",
@@ -151,6 +150,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$remove_all,{
     prcodes$codes<-data.frame("Prccode"=20135125,"Name"="Chromates and dichromates; peroxochromates")
+    info_text$text <- ""
   })
   
   observeEvent(input$upload_codes,{
