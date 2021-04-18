@@ -7,7 +7,7 @@ use the function `runGitHub()`. For example, to run the example `SPIN-analysis`:
 
 ```R
 if (!require('shiny')) install.packages("shiny")
-shiny::runGitHub("ShinyApps", "JasperSchalla", subdir = "SPIN-analysis")
+shiny::runGitHub("ShinyApps", "jasperschalla", subdir = "SPIN-analysis")
 ```
 
 Or you can clone or download this repository, and use run
