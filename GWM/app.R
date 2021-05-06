@@ -98,6 +98,8 @@ server <- function(input, output, session){
   name_vec <- c("hw","mhw","mw","mnw","nw")
   germany <- st_read(".\\geo_data\\DEU_adm1.shp") %>%
     filter(NAME_1 %in% c("Sachsen","Sachsen-Anhalt"))
+  orig_crs <- st_crs(st_read(".\\geo_data\\crs_holder_sachsen.shp"))
+  orig_crs2 <- st_crs(st_read(".\\geo_data\\crs_holder_sachsen_anhalt.shp"))
   
   df_sachsen <- reactive({
     fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"]
