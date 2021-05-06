@@ -3,12 +3,15 @@ library(shinydashboard)
 library(colourpicker)
 library(leaflet)
 library(sf)
+library(sp)
 library(tidyverse)
 library(htmltools)
 library(scales)
 library(data.table)
 library(spatstat) 
-library(maptools) 
+library(maptools)
+library(leaflet.extras)
+library(rgdal)
 
 ui <- dashboardPage(skin = "black",
   dashboardHeader(title = span(tagList(icon("tint"),"GWM"))),
@@ -16,7 +19,8 @@ ui <- dashboardPage(skin = "black",
       sidebarMenu(
         menuItem("Datenuplopad",tabName = "upload_data",icon = icon("upload")),
         menuItem("Metadaten",tabName = "meta_data",icon=icon("chart-area")),
-        menuItem("Grundwassermessstellen",tabName = "wells_data",icon = icon("layer-group"))
+        menuItem("Grundwassermessstellen",tabName = "wells_data",icon = icon("layer-group")),
+        menuItem("Ausgewaehlte Shapefiles",tabName = "selected_tab",icon=icon("table"))
       )
   ),
   dashboardBody(
@@ -35,7 +39,7 @@ ui <- dashboardPage(skin = "black",
       tabItem(tabName = "wells_data",
               fluidRow(
                 absolutePanel(fixed = TRUE,
-                              draggable = FALSE, top = 150, left="auto" ,right = "auto", bottom = "auto",
+                              draggable = FALSE, top = 200, left="auto" ,right = "auto", bottom = "auto",
                               width = 600, height = "auto", style = "opacity: 1; z-index: 10;",
                               box(background = "navy",
                                   h3("Kartenoptionen"),
@@ -55,7 +59,11 @@ ui <- dashboardPage(skin = "black",
                                   checkboxInput("show_th",label=strong("Thiessens Polygone zeigen")),
                                   checkboxInput("show_time_series",label=strong("Zeitreihen zeigen")),
                                   conditionalPanel("input.show_time_series==true",dateRangeInput("df_years",label=strong("Jahre der Zeitreihen"),start = "1900-01-01",end="2021-01-01",
-                                                                     format="dd.mm.yyyy",separator = " - ")))),
+                                                                     format="dd.mm.yyyy",separator = " - ")),
+                                  br(),
+                                  textOutput("no_selected"),
+                                  br(),
+                                  column(width=12,offset=1,downloadButton("download_selected","Shapefiles exportieren")))),
               conditionalPanel("input.show_time_series==true",
                                absolutePanel(fixed = TRUE,
                                              draggable = TRUE, top = 150, left=800 ,right = "auto", bottom = "auto",
@@ -64,6 +72,11 @@ ui <- dashboardPage(skin = "black",
               tags$style(type = "text/css", "#map {height: calc(100vh - 80px) !important;}"),
               leafletOutput("map"))
       ),
+      tabItem(tabName = "selected_tab",
+              fluidRow(box(width = 12,
+                           DT::dataTableOutput("selected_download")))
+              
+              ),
       tabItem(tabName = "meta_data",
               fluidRow(box(width = 12,background = "navy",column(width = 12,offset = 4,h1("Metadaten")))),
               fluidRow(
@@ -100,6 +113,12 @@ server <- function(input, output, session){
     filter(NAME_1 %in% c("Sachsen","Sachsen-Anhalt"))
   orig_crs <- st_crs(st_read(".\\geo_data\\crs_holder_sachsen.shp"))
   orig_crs2 <- st_crs(st_read(".\\geo_data\\crs_holder_sachsen_anhalt.shp"))
+  
+  # UpdateSession
+  
+  
+  selected_shp <- reactiveValues(data=NULL)
+  
   
   df_sachsen <- reactive({
     fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"]
@@ -191,7 +210,8 @@ server <- function(input, output, session){
     st_as_sf(th) %>%
       st_transform(crs=4326) %>%
       st_intersection(germany) %>%
-      mutate(area=round(as.numeric(st_area(geometry))/1e6,2))
+      mutate(area=round(as.numeric(st_area(geometry))/1e6,2)) %>%
+      rowid_to_column("id")
 
   })
   
@@ -199,15 +219,124 @@ server <- function(input, output, session){
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
-    
-    print(head(th_poly_sachsen()))
-    #print(head(df_all()))
   })
   
   time_properties_all <- reactive({
     rbind(
       dplyr::select(time_properties_sachsen(),-abflussjahr,-wert_in_cm_unter_gelande,-messwert_in_cm_unter_messpunkt,-hohensystem),
       time_properties_sachsen_anhalt())
+  })
+  
+  sf_selected <- reactive({
+    
+    req(input$map_draw_stop)
+    coords <- input$map_draw_new_feature$geometry$coordinates[[1]]
+    polygon <- st_polygon(list(do.call(rbind,lapply(coords,function(x){c(x[[1]][1],x[[2]][1])}))))
+  
+    if (input$show_th & !any(c(input$show_desc_values,input$show_period))){
+      temp_shp <- th_poly_all()[st_intersects(polygon,th_poly_all())[[1]],] %>%
+        pull(id)
+    } else {
+      temp_shp <- sf_all()[st_intersects(polygon,sf_all())[[1]],] %>%
+        pull(mkz)
+    }
+    
+    temp_shp
+    
+  })
+  
+  observe({
+    
+    shiny::validate(
+      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden"),
+      need(!is.null(sf_selected())," ")
+    )
+
+    
+    if (input$show_descr_values & !input$show_period & !input$show_th){
+      if (input$marker_loc=="Sachsen"){
+        
+        selected_shp$data <- sf_sachsen() %>%
+          filter(mkz %in% sf_selected()) %>%
+          select(mkz,messstellenname,hw,mhw,mw,mnw,nw)
+        
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+
+        selected_shp$data <- sf_sachsen_anhalt() %>%
+          filter(mkz %in% sf_selected()) %>%
+          select(mkz,messstellenname,hw,mhw,mw,mnw,nw)
+        
+      } else {
+        
+        selected_shp$data <- sf_sachsen() %>%
+          filter(mkz %in% sf_selected()) %>%
+          select(mkz,messstellenname,hw,mhw,mw,mnw,nw,loc)
+      }
+    } else if (!input$show_descr_values & input$show_period & !input$show_th) {
+      if (input$marker_loc=="Sachsen"){
+        
+        selected_shp$data <- time_properties_sachsen() %>%
+          filter(mkz %in% sf_selected()) %>%
+          select(mkz,messstellenname,laenge=period,intervall=mean_diff)
+
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+    
+        selected_shp$data <- time_properties_sachsen_anhalt() %>%
+          filter(mkz %in% sf_selected()) %>%
+          select(mkz,messstellenname,laenge=period,intervall=mean_diff)
+        
+      } else {
+
+        selected_shp$data <- time_properties_all() %>%
+          filter(mkz %in% sf_selected()) %>%
+          select(mkz,messstellenname,laenge=period,intervall=mean_diff)
+        
+      }
+
+    } else if (input$show_th & !input$show_descr_values & !input$show_period ){
+
+      if (input$marker_loc=="Sachsen"){
+        
+        selected_shp$data <- th_poly_sachsen() %>%
+          filter(id %in% sf_selected()) %>%
+          select(area) %>%
+          st_join(dplyr::select(sf_all(),geometry,mkz,messstellenname))
+
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+
+        selected_shp$data <- th_poly_sachsen_anhalt() %>%
+          filter(id %in% sf_selected()) %>%
+          select(area) %>%
+          st_join(dplyr::select(sf_all(),geometry,mkz,messstellenname))
+        
+      } else {
+
+        selected_shp$data <- th_poly_all() %>%
+          filter(id %in% sf_selected()) %>%
+          select(area) %>%
+          st_join(dplyr::select(sf_all(),geometry,mkz,messstellenname))
+        
+      }
+
+    } else {
+      if (input$marker_loc=="Sachsen"){
+
+        selected_shp$data <- dplyr::select(sf_sachsen(),-abflussjahr,-wert_in_cm_unter_gelande,-messwert_in_cm_unter_messpunkt,-hohensystem) %>%
+          filter(mkz %in% sf_selected())
+        
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+
+        selected_shp$data <- sf_sachsen_anhalt() %>%
+          filter(mkz %in% sf_selected())
+        
+      } else {
+        
+        selected_shp$data <- sf_all() %>%
+          filter(mkz %in% sf_selected()) 
+
+      }
+    }
+    
   })
 
   
@@ -237,7 +366,7 @@ server <- function(input, output, session){
       click$id
   })
   
-  pal_fun <-colorNumeric("Blues",NULL)
+  pal_fun <-colorNumeric("viridis",NULL)
   pal_th <-colorNumeric("YlOrRd",NULL)
   d_pal_fun <- colorFactor(c(col_sachsen,col_sachsen_anhalt),NULL)
   
@@ -297,17 +426,17 @@ server <- function(input, output, session){
   })
   
   default_popup_sachsen <- reactive({
-    paste("<strong>Messtellenname:</strong>",sf_sachsen()$messstellenname,
+    paste("<strong>Messtellenname:</strong>",sf_sachsen()$messstellenname,"<br>",
           "<strong>Kennzeichnungsnummer:</strong>",sf_sachsen()$mkz)
   })
   
   default_popup_sachsen_anhalt <- reactive({
-    paste("<strong>Messtellenname:</strong>",sf_sachsen_anhalt()$messstellenname,
+    paste("<strong>Messtellenname:</strong>",sf_sachsen_anhalt()$messstellenname,"<br>",
           "<strong>Kennzeichnungsnummer:</strong>",sf_sachsen_anhalt()$mkz)
   })
   
   default_popup_all <- reactive({
-    paste("<strong>Messtellenname:</strong>",sf_all()$messstellenname,
+    paste("<strong>Messtellenname:</strong>",sf_all()$messstellenname,"<br>",
           "<strong>Kennzeichnungsnummer:</strong>",sf_all()$mkz)
   })
   
@@ -345,6 +474,14 @@ server <- function(input, output, session){
             color = ~pal_fun(eval(as.symbol(tolower(input$descr_values)))),
             popup = popup_content_descr_sachsen(),
             layerId = sf_sachsen()$mkz) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(tolower(input$descr_values))),opacity = 1,
                     title = input$descr_values) 
       } else if (input$marker_loc=="Sachsen-Anhalt"){
@@ -356,6 +493,14 @@ server <- function(input, output, session){
             color = ~pal_fun(eval(as.symbol(tolower(input$descr_values)))),
             popup = popup_content_descr_sachsen_anhalt(),
             layerId = sf_sachsen_anhalt()$mkz) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(tolower(input$descr_values))),opacity = 1,
                     title = input$descr_values) 
       } else {
@@ -367,6 +512,14 @@ server <- function(input, output, session){
             color = ~pal_fun(eval(as.symbol(tolower(input$descr_values)))),
             popup = popup_content_descr_both(),
             layerId = sf_all()$mkz) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(tolower(input$descr_values))),opacity = 1,
                     title = input$descr_values) 
       }
@@ -383,6 +536,14 @@ server <- function(input, output, session){
             color = ~pal_fun(eval(as.symbol(period2str(input$period)))),
             popup = popup_content_period_sachsen(),
             layerId = time_properties_sachsen()$mkz) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(period2str(input$period))),opacity = 1,
                     title = period2title(input$period))
       } else if (input$marker_loc=="Sachsen-Anhalt"){
@@ -397,6 +558,14 @@ server <- function(input, output, session){
             color = ~pal_fun(eval(as.symbol(period2str(input$period)))),
             popup = popup_content_period_sachsen_anhalt(),
             layerId = time_properties_sachsen_anhalt()$mkz) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(period2str(input$period))),opacity = 1,
                     title = period2title(input$period))
       } else {
@@ -411,6 +580,14 @@ server <- function(input, output, session){
             color = ~pal_fun(eval(as.symbol(period2str(input$period)))),
             popup = popup_content_period_both(),
             layerId = time_properties_all()$mkz) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(period2str(input$period))),opacity = 1,
                     title = period2title(input$period)) 
       }
@@ -430,6 +607,14 @@ server <- function(input, output, session){
                       layerId = th_poly_sachsen()$area,
                       stroke = T,
                       weight = 1) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_th,values = th_poly_sachsen()$area,opacity = 1,title = "Flaeche [km<sup>2</sup>]")
         
       } else if (input$marker_loc=="Sachsen-Anhalt"){
@@ -444,6 +629,14 @@ server <- function(input, output, session){
                       popup = th_sachsen_anhalt_popup(),
                       stroke = T,
                       weight = 1) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_th,values = th_poly_sachsen_anhalt()$area,opacity = 1,title = "Flaeche [km<sup>2</sup>]")
       } else {
         leaflet() %>%
@@ -457,6 +650,14 @@ server <- function(input, output, session){
                       popup = th_all_popup(),
                       stroke = T,
                       weight = 1) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_th,values = th_poly_all()$area,opacity = 1,title = "Flaeche [km<sup>2</sup>]")
       }
       
@@ -469,7 +670,15 @@ server <- function(input, output, session){
             opacity = 1,
             layerId = sf_sachsen()$mkz,
             color = col_sachsen,
-            popup = default_popup_sachsen())
+            popup = default_popup_sachsen()) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw")
       } else if (input$marker_loc=="Sachsen-Anhalt"){
         temp_leaflet %>%
           addCircleMarkers(
@@ -478,7 +687,15 @@ server <- function(input, output, session){
             opacity = 1,
             layerId = sf_sachsen_anhalt()$mkz,
             color = col_sachsen_anhalt,
-            popup = default_popup_sachsen_anhalt())
+            popup = default_popup_sachsen_anhalt()) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw")
       } else {
         temp_leaflet %>%
           addCircleMarkers(
@@ -488,7 +705,15 @@ server <- function(input, output, session){
             layerId = sf_all()$mkz,
             color = ~d_pal_fun(loc),
             popup = default_popup_all()) %>%
-          addLegend("bottomright",pal=d_pal_fun,values = ~loc,opacity = 1,title = "Bundesland") 
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
+          addLegend("bottomright",pal=d_pal_fun,values = ~loc,opacity = 1,title = "Bundesland")
       }
     }
   })
@@ -576,6 +801,46 @@ server <- function(input, output, session){
         scale_fill_manual("Bundesland",values = c(col_sachsen,col_sachsen_anhalt))
     }
   })
+  
+  output$selected_download <- DT::renderDataTable({
+    shiny::validate(
+      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
+    )
+    DT::datatable(selected_shp$data,rownames = F)
+  })
+  
+  output$no_selected <- renderText({
+    shiny::validate(
+      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
+    )
+    
+    if (length(selected_shp$data)!=0){
+      paste("Anzahl an ausgewaehlten Objekten: ",nrow(selected_shp$data)) 
+    } else {
+      paste("Anzahl an ausgewaehlten Objekten: ",0)
+    }
+  })
+  
+  output$download_selected <- downloadHandler(
+    filename = function(){
+      paste("selected_shapefile","zip",sep = ".")
+    },
+    content = function(file){
+      
+      cont <- as(selected_shp$data %>% mutate(messzeitpunkt=as.character(messzeitpunkt)),"Spatial")
+      if (length(Sys.glob("selected_objects.*"))>0){
+        file.remove(Sys.glob("selected_objects.*"))
+      }
+      writeOGR(cont, dsn="selected_objects.shp", layer="selected_objects", driver="ESRI Shapefile")
+      write.csv(as.data.frame(cbind(cont@data, as.data.frame(cont@coords))), "selected_objects.csv")
+      zip(zipfile='shapefileExport.zip', files=Sys.glob("selected_objects.*"))
+      file.copy("shapefileExport.zip", file)
+      if (length(Sys.glob("selected_objects.*"))>0){
+        file.remove(Sys.glob("selected_objects.*"))
+      }
+      
+    }
+  )
   
 }
 
