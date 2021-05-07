@@ -34,7 +34,7 @@ ui <- dashboardPage(skin = "black",
                            br(),
                            fileInput("df_sachsen_anhalt",label = strong("Datensatz Sachsen-Anhalt"),accept = ".csv"))),
               fluidRow(box(width = 12,background = "navy",
-                           p("Upload Status")))
+                           p("Upload Status"),textOutput("upload_status")))
               ),
       tabItem(tabName = "wells_data",
               fluidRow(
@@ -48,7 +48,7 @@ ui <- dashboardPage(skin = "black",
                                               selected = "Sachsen + Sachsen-Anhalt"),
                                   checkboxInput("show_descr_values",label=strong("Kennwerte zeigen")),
                                   conditionalPanel("input.show_descr_values==true",
-                                                   selectInput("descr_values",label = strong("Kennwerte"),
+                                                   selectInput("descr_values",label = "Kennwerte",
                                                                choices = c("HW","MHW","MW","MNW","NW"),
                                                                selected = "HW")),
                                   checkboxInput("show_period",label=strong("Zeitreiheneigenschaften zeigen")),
@@ -57,8 +57,11 @@ ui <- dashboardPage(skin = "black",
                                                                label = strong("Zeitreiheneigenschaften"),
                                                                selected = "Zeitreihenlaenge")),
                                   checkboxInput("show_th",label=strong("Thiessens Polygone zeigen")),
+                                  checkboxInput("show_outliers",label = strong("Ausreisser ausblenden")),
+                                  conditionalPanel("input.show_outliers==true",
+                                                   numericInput("outliers",label = "Grenze fuer Ausreisser [m u. MP]",250,min = 0,100000)),
                                   checkboxInput("show_time_series",label=strong("Zeitreihen zeigen")),
-                                  conditionalPanel("input.show_time_series==true",dateRangeInput("df_years",label=strong("Jahre der Zeitreihen"),start = "1900-01-01",end="2021-01-01",
+                                  conditionalPanel("input.show_time_series==true",dateRangeInput("df_years",label="Jahre der Zeitreihen",start = "1900-01-01",end="2021-01-01",
                                                                      format="dd.mm.yyyy",separator = " - ")),
                                   br(),
                                   textOutput("no_selected"),
@@ -74,7 +77,7 @@ ui <- dashboardPage(skin = "black",
       ),
       tabItem(tabName = "selected_tab",
               fluidRow(box(width = 12,
-                           DT::dataTableOutput("selected_download")))
+                           dataTableOutput("selected_download")))
               
               ),
       tabItem(tabName = "meta_data",
@@ -113,19 +116,29 @@ server <- function(input, output, session){
     filter(NAME_1 %in% c("Sachsen","Sachsen-Anhalt"))
   orig_crs <- st_crs(st_read(".\\geo_data\\crs_holder_sachsen.shp"))
   orig_crs2 <- st_crs(st_read(".\\geo_data\\crs_holder_sachsen_anhalt.shp"))
+  unit_values <- "m u. MP"
   
   # UpdateSession
-  
   
   selected_shp <- reactiveValues(data=NULL)
   
   
   df_sachsen <- reactive({
-    fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"]
+    if (input$show_outliers){
+      fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"] %>%
+        .[hw<input$outliers & mhw<input$outliers & mw<input$outliers & mnw<input$outliers & nw<input$outliers]
+    } else {
+      fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"] 
+    }
   })
   
   df_sachsen_anhalt <- reactive({
-    fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"]
+    if (input$show_outliers){
+      fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"] %>%
+        .[hw<input$outliers & mhw<input$outliers & mw<input$outliers & mnw<input$outliers & nw<input$outliers]
+    } else {
+      fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"] 
+    }
   })
   
   df_all <- reactive({
@@ -251,6 +264,9 @@ server <- function(input, output, session){
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden"),
       need(!is.null(sf_selected())," ")
     )
+    
+    print(st_crs(sf_all()))
+    print(st_crs(selected_shp$data))
 
     
     if (input$show_descr_values & !input$show_period & !input$show_th){
@@ -322,17 +338,20 @@ server <- function(input, output, session){
       if (input$marker_loc=="Sachsen"){
 
         selected_shp$data <- dplyr::select(sf_sachsen(),-abflussjahr,-wert_in_cm_unter_gelande,-messwert_in_cm_unter_messpunkt,-hohensystem) %>%
-          filter(mkz %in% sf_selected())
+          filter(mkz %in% sf_selected()) %>%
+          select(-hw,-mhw,-mw,-mnw,-nw,-messzeitpunkt,-einheit,-wert)
         
       } else if (input$marker_loc=="Sachsen-Anhalt"){
 
         selected_shp$data <- sf_sachsen_anhalt() %>%
-          filter(mkz %in% sf_selected())
+          filter(mkz %in% sf_selected()) %>%
+          select(-hw,-mhw,-mw,-mnw,-nw,-messzeitpunkt,-einheit,-wert)
         
       } else {
         
         selected_shp$data <- sf_all() %>%
-          filter(mkz %in% sf_selected()) 
+          filter(mkz %in% sf_selected()) %>%
+          select(-hw,-mhw,-mw,-mnw,-nw,-messzeitpunkt,-einheit,-wert)
 
       }
     }
@@ -371,28 +390,28 @@ server <- function(input, output, session){
   d_pal_fun <- colorFactor(c(col_sachsen,col_sachsen_anhalt),NULL)
   
   popup_content_descr_sachsen <- reactive({
-    paste("<strong>HW: </strong>",sf_sachsen()$hw,"m","<br>",
-          "<strong>MHW:</strong>",sf_sachsen()$mhw,"m","<br>",
-          "<strong>MW: </strong>",sf_sachsen()$mw,"m","<br>",
-          "<strong>MNW:</strong>",sf_sachsen()$mnw,"m","<br>",
-          "<strong>NW: </strong>",sf_sachsen()$nw,"m")
+    paste("<strong>HW: </strong>",sf_sachsen()$hw,unit_values,"<br>",
+          "<strong>MHW:</strong>",sf_sachsen()$mhw,unit_values,"<br>",
+          "<strong>MW: </strong>",sf_sachsen()$mw,unit_values,"<br>",
+          "<strong>MNW:</strong>",sf_sachsen()$mnw,unit_values,"<br>",
+          "<strong>NW: </strong>",sf_sachsen()$nw,unit_values)
   })  
   
   
   popup_content_descr_sachsen_anhalt <- reactive({
-    paste("<strong>HW: </strong>",sf_sachsen_anhalt()$hw,"m","<br>",
-          "<strong>MHW:</strong>",sf_sachsen_anhalt()$mhw,"m","<br>",
-          "<strong>MW: </strong>",sf_sachsen_anhalt()$mw,"m","<br>",
-          "<strong>MNW:</strong>",sf_sachsen_anhalt()$mnw,"m","<br>",
-          "<strong>NW: </strong>",sf_sachsen_anhalt()$nw,"m")
+    paste("<strong>HW: </strong>",sf_sachsen_anhalt()$hw,unit_values,"<br>",
+          "<strong>MHW:</strong>",sf_sachsen_anhalt()$mhw,unit_values,"<br>",
+          "<strong>MW: </strong>",sf_sachsen_anhalt()$mw,unit_values,"<br>",
+          "<strong>MNW:</strong>",sf_sachsen_anhalt()$mnw,unit_values,"<br>",
+          "<strong>NW: </strong>",sf_sachsen_anhalt()$nw,unit_values)
   })  
   
   popup_content_descr_both <- reactive({
-    paste("<strong>HW: </strong>",sf_all()$hw,"m","<br>",
-          "<strong>MHW:</strong>",sf_all()$mhw,"m","<br>",
-          "<strong>MW: </strong>",sf_all()$mw,"m","<br>",
-          "<strong>MNW:</strong>",sf_all()$mnw,"m","<br>",
-          "<strong>NW: </strong>",sf_all()$nw,"m")
+    paste("<strong>HW: </strong>",sf_all()$hw,unit_values,"<br>",
+          "<strong>MHW:</strong>",sf_all()$mhw,unit_values,"<br>",
+          "<strong>MW: </strong>",sf_all()$mw,unit_values,"<br>",
+          "<strong>MNW:</strong>",sf_all()$mnw,unit_values,"<br>",
+          "<strong>NW: </strong>",sf_all()$nw,unit_values)
   })  
   
   popup_content_period_sachsen <- reactive({
@@ -483,7 +502,7 @@ server <- function(input, output, session){
             circleMarkerOptions = F) %>%
           hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(tolower(input$descr_values))),opacity = 1,
-                    title = input$descr_values) 
+                    title = paste0(input$descr_values," [",unit_values,"]")) 
       } else if (input$marker_loc=="Sachsen-Anhalt"){
         temp_leaflet %>%
           addCircleMarkers(
@@ -502,7 +521,7 @@ server <- function(input, output, session){
             circleMarkerOptions = F) %>%
           hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(tolower(input$descr_values))),opacity = 1,
-                    title = input$descr_values) 
+                    title = paste0(input$descr_values," [",unit_values,"]")) 
       } else {
         temp_leaflet %>%
           addCircleMarkers(
@@ -521,7 +540,7 @@ server <- function(input, output, session){
             circleMarkerOptions = F) %>%
           hideGroup("draw") %>%
           addLegend("bottomright",pal = pal_fun,values = ~eval(as.symbol(tolower(input$descr_values))),opacity = 1,
-                    title = input$descr_values) 
+                    title = paste0(input$descr_values," [",unit_values,"]")) 
       }
     } else if (!input$show_descr_values & input$show_period & !input$show_th) {
       if (input$marker_loc=="Sachsen"){
@@ -718,6 +737,18 @@ server <- function(input, output, session){
     }
   })
   
+  
+  output$upload_status <- renderText({
+    shiny::validate(
+      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Daten noch nicht vollstaendig eingelesen")
+    )
+    
+    if (nrow(df_sachsen())>0 & nrow(df_sachsen_anhalt())>0){
+      "Daten vollstaendig eingelesen"
+    }
+    
+  })
+  
   output$time_series <- renderPlot({
     
     
@@ -745,8 +776,8 @@ server <- function(input, output, session){
       ggplot(aes(messzeitpunkt,wert))+
       geom_line(col="darkblue")+
       geom_point(col="darkblue")+
-      labs(x="",y="",title = title)+
-      scale_y_reverse()
+      labs(x="",y= unit_values,title = title)+
+      scale_y_reverse(labels=comma)
   })
   
   output$meta1 <- renderPlot({
@@ -802,11 +833,11 @@ server <- function(input, output, session){
     }
   })
   
-  output$selected_download <- DT::renderDataTable({
+  output$selected_download <- renderDataTable({
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
-    DT::datatable(selected_shp$data,rownames = F)
+    selected_shp$data
   })
   
   output$no_selected <- renderText({
@@ -827,17 +858,30 @@ server <- function(input, output, session){
     },
     content = function(file){
       
-      cont <- as(selected_shp$data %>% mutate(messzeitpunkt=as.character(messzeitpunkt)),"Spatial")
-      if (length(Sys.glob("selected_objects.*"))>0){
-        file.remove(Sys.glob("selected_objects.*"))
-      }
-      writeOGR(cont, dsn="selected_objects.shp", layer="selected_objects", driver="ESRI Shapefile")
-      write.csv(as.data.frame(cbind(cont@data, as.data.frame(cont@coords))), "selected_objects.csv")
-      zip(zipfile='shapefileExport.zip', files=Sys.glob("selected_objects.*"))
-      file.copy("shapefileExport.zip", file)
-      if (length(Sys.glob("selected_objects.*"))>0){
-        file.remove(Sys.glob("selected_objects.*"))
-      }
+      shp_data <- selected_shp$data %>%
+        st_transform(crs=orig_crs) %>%
+        as("Spatial")
+      
+      temp_shp <- tempdir()
+      # write shp files
+
+      writeOGR(shp_data, temp_shp, "selected_features", "ESRI Shapefile",
+               overwrite_layer = TRUE)
+      
+      #zip all the shp files
+      zip_file <- file.path(temp_shp, "selected_features.zip")
+      shp_files <- list.files(temp_shp,
+                              "selected_features",
+                              full.names = TRUE)
+      # the following zip method works for me in linux but substitute with whatever method working in your OS 
+      zip_command <- paste("zip -j", 
+                           zip_file, 
+                           paste(shp_files, collapse = " "))
+      system(zip_command)
+      # copy the zip file to the file argument
+      file.copy(zip_file, file)
+      # remove all the files created
+      file.remove(zip_file, shp_files)
       
     }
   )
