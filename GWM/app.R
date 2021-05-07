@@ -59,7 +59,7 @@ ui <- dashboardPage(skin = "black",
                                   checkboxInput("show_th",label=strong("Thiessens Polygone zeigen")),
                                   checkboxInput("show_outliers",label = strong("Ausreisser ausblenden")),
                                   conditionalPanel("input.show_outliers==true",
-                                                   numericInput("outliers",label = "Grenze fuer Ausreisser [m u. MP]",250,min = 0,100000)),
+                                                   numericInput("outliers",label = "Grenze fuer Ausreisser [m]",250,min = 0,100000)),
                                   checkboxInput("show_time_series",label=strong("Zeitreihen zeigen")),
                                   conditionalPanel("input.show_time_series==true",dateRangeInput("df_years",label="Jahre der Zeitreihen",start = "1900-01-01",end="2021-01-01",
                                                                      format="dd.mm.yyyy",separator = " - ")),
@@ -116,7 +116,7 @@ server <- function(input, output, session){
     filter(NAME_1 %in% c("Sachsen","Sachsen-Anhalt"))
   orig_crs <- st_crs(st_read(".\\geo_data\\crs_holder_sachsen.shp"))
   orig_crs2 <- st_crs(st_read(".\\geo_data\\crs_holder_sachsen_anhalt.shp"))
-  unit_values <- "m u. MP"
+  unit_values <- "m"
   
   # UpdateSession
   
@@ -785,7 +785,8 @@ server <- function(input, output, session){
       geom_line(col="darkblue")+
       geom_point(col="darkblue")+
       labs(x="",y= unit_values,title = title)+
-      scale_y_reverse(labels=comma)
+      scale_y_continuous(labels = comma)
+      #scale_y_reverse(labels=comma)
   })
   
   output$meta1 <- renderPlot({
