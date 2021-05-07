@@ -200,7 +200,8 @@ server <- function(input, output, session){
     st_as_sf(th) %>%
       st_transform(crs=4326) %>%
       st_intersection(germany[germany$NAME_1=="Sachsen",]) %>%
-      mutate(area=round(as.numeric(st_area(geometry))/1e6,2))
+      mutate(area=round(as.numeric(st_area(geometry))/1e6,2)) %>%
+      rowid_to_column("id")
   })
   
   th_poly_sachsen_anhalt <- reactive({
@@ -210,8 +211,9 @@ server <- function(input, output, session){
     
     st_as_sf(th) %>%
       st_transform(crs=4326) %>%
-      st_intersection(germany[germany$NAME_1=="Sachsen Anhalt",]) %>%
-      mutate(area=round(as.numeric(st_area(geometry))/1e6,2))
+      st_intersection(germany[germany$NAME_1=="Sachsen-Anhalt",]) %>%
+      mutate(area=round(as.numeric(st_area(geometry))/1e6,2)) %>%
+      rowid_to_column("id")
   })
   
   th_poly_all <- reactive({
@@ -247,13 +249,22 @@ server <- function(input, output, session){
     polygon <- st_polygon(list(do.call(rbind,lapply(coords,function(x){c(x[[1]][1],x[[2]][1])}))))
   
     if (input$show_th & !any(c(input$show_desc_values,input$show_period))){
-      temp_shp <- th_poly_all()[st_intersects(polygon,th_poly_all())[[1]],] %>%
-        pull(id)
+      if (input$marker_loc=="Sachsen"){
+        temp_shp <- th_poly_sachsen()[st_intersects(polygon,th_poly_sachsen())[[1]],] %>%
+          pull(id)
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+        temp_shp <- th_poly_sachsen_anhalt()[st_intersects(polygon,th_poly_sachsen_anhalt())[[1]],] %>%
+          pull(id)
+      } else {
+        temp_shp <- th_poly_all()[st_intersects(polygon,th_poly_all())[[1]],] %>%
+          pull(id)        
+      }
+
     } else {
       temp_shp <- sf_all()[st_intersects(polygon,sf_all())[[1]],] %>%
         pull(mkz)
     }
-    
+
     temp_shp
     
   })
@@ -263,10 +274,8 @@ server <- function(input, output, session){
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden"),
       need(!is.null(sf_selected())," ")
+      
     )
-    
-    print(st_crs(sf_all()))
-    print(st_crs(selected_shp$data))
 
     
     if (input$show_descr_values & !input$show_period & !input$show_th){
@@ -312,7 +321,6 @@ server <- function(input, output, session){
     } else if (input$show_th & !input$show_descr_values & !input$show_period ){
 
       if (input$marker_loc=="Sachsen"){
-        
         selected_shp$data <- th_poly_sachsen() %>%
           filter(id %in% sf_selected()) %>%
           select(area) %>%
