@@ -13,6 +13,8 @@ library(maptools)
 library(leaflet.extras)
 library(rgdal)
 library(gstat)
+library(dtwclust)
+library(zoo)
 
 ui <- dashboardPage(skin = "black",
   dashboardHeader(title = span(tagList(icon("tint"),"GWM"))),
@@ -56,7 +58,7 @@ ui <- dashboardPage(skin = "black",
                                                                choices = c("HW","MHW","MW","MNW","NW"),
                                                                selected = "HW")),
                                                    tags$style(type="text/css","#descr_container {color:#9dbccf;}"),
-                                                   div(id="interpolation_container",checkboxInput("interpolation",label = "Interpolieren")),
+                                                   div(id="interpolation_container",checkboxInput("interpolation",label = "Ordinary Kriging")),
                                                    tags$style(type="text/css","#interpolation_container {color:#9dbccf;}"),
                                                    div(id="res_container",sliderInput("interpolation_res","Aufloesung des Interpolation-Rasters [m]",min = 1000,max=15000,value = 2500)),
                                                    tags$style(type="text/css","#res_container {color:#9dbccf;}"),
@@ -71,10 +73,14 @@ ui <- dashboardPage(skin = "black",
                                   checkboxInput("show_outliers",label = strong("Ausreisser ausblenden")),
                                   conditionalPanel("input.show_outliers==true",div(id="outliers_container",numericInput("outliers",label = "Grenze fuer Ausreisser [m]",250,min = 0,100000)),
                                                    tags$style(type="text/css","#outliers_container {color:#9dbccf;}")),
+                                  conditionalPanel("input.marker_loc=='Sachsen'",checkboxInput("show_alt",label=strong("Hoehensysteme anzeigen"))),
                                   checkboxInput("show_time_series",label=strong("Zeitreihen zeigen")),
                                   conditionalPanel("input.show_time_series==true",div(id="df_years_container",dateRangeInput("df_years",label="Jahre der Zeitreihen",start = "1900-01-01",end="2021-01-01",
                                                                      format="dd.mm.yyyy",separator = " - ")),
                                                    tags$style(type="text/css","#df_years_container {color:#9dbccf;}")),
+                                  checkboxInput("show_cluster",label=strong("Cluster")),
+                                  conditionalPanel("input.show_cluster==true",
+                                                   sliderInput("k_map",label=strong("K"),min = 2,max=10,value = 3)),
                                   br(),
                                   textOutput("no_selected"),
                                   br(),
@@ -117,7 +123,34 @@ ui <- dashboardPage(skin = "black",
                                 selected = "Sachsen + Sachsen-Anhalt"),
                     dateRangeInput("gw_change_years",label="Jahre der Zeitreihen",start = "1900-01-01",end="2021-01-01",
                                    format="yyyy",separator = " - ",startview = "year")),
-                box(width = 9,background = "navy",plotOutput("meta3")))
+                box(width = 9,background = "navy",plotOutput("meta3"))),
+              fluidRow(
+                box(width=3,background="navy",
+                    h3("Cluster-Optionen"),
+                    br(),
+                    selectInput("marker_loc_meta4",label=strong("Bundesland"),choices = c("Sachsen + Sachsen-Anhalt","Sachsen","Sachsen-Anhalt"),
+                                selected = "Sachsen + Sachsen-Anhalt"),
+                    selectInput("cluster_type",label = strong("Cluster Typ"),choices = c("partitional","hierarchical"),selected = "partitional"),
+                    column(width = 12,conditionalPanel("input.cluster_type=='partitional'",
+                      selectInput("distance",label = strong("Distance"),choices = c("dtw_basic","gak","sbd"),selected = "dtw_basic"),
+                      selectInput("centroid",label = strong("Centroid"),choices = c("shape","dba","pam"),selected = "dba")),
+                      conditionalPanel("input.cluster_type=='hierarchical'",
+                          selectInput("distance",label = strong("Distance"),choices = c("dtw_basic","gak","sbd"),selected = "dtw_basic"),
+                          selectInput("controls",label = strong("Method"),choices = c("complete","average"),selected = "complete")
+                      )),
+                    sliderInput("boundaries",label = strong("K"),min = 2,max = 10,value = c(2,5)),
+                    column(width=12,offset=4,actionButton("calculate_cluster",label = strong("Berechnen"))),
+                    br(),
+                    br(),
+                    h3("Plot-Optionen"),
+                    br(),
+                    sliderInput("k",label = strong("K"),min = 2,max=10,value = 3)),
+                box(width=9,dataTableOutput("kmeans"),
+                    br(),
+                    plotOutput("clusters"),
+                    br(),
+                    plotOutput("cluster_overview"))
+              )
             )
     )
   )
@@ -128,8 +161,8 @@ server <- function(input, output, session){
   options(shiny.maxRequestSize=1e9)
   
   
-  col_sachsen <- "#EEAD0E"
-  col_sachsen_anhalt <- "#009ACD"
+  col_sachsen <- viridis::viridis(2)[1]#"#EEAD0E" 
+  col_sachsen_anhalt <- viridis::viridis(2)[2]#"#009ACD"
   name_vec <- c("hw","mhw","mw","mnw","nw")
   germany <- st_read(".\\geo_data\\DEU_adm1.shp") %>%
     filter(NAME_1 %in% c("Sachsen","Sachsen-Anhalt"))
@@ -138,6 +171,11 @@ server <- function(input, output, session){
   unit_values <- "m"
   
   # UpdateSession
+  
+  observe({
+    updateSliderInput(session,"k",min = input$boundaries[1],max=input$boundaries[2],value = ceiling(input$boundaries[2]-input$boundaries[1]))
+    updateSliderInput(session,"k_map",min = input$boundaries[1],max=input$boundaries[2],value = ceiling(input$boundaries[2]-input$boundaries[1]))
+  })
   
   selected_shp <- reactiveValues(data=NULL)
   
@@ -429,6 +467,12 @@ server <- function(input, output, session){
         
       }
 
+    } else if (input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period){
+      
+      selected_shp$data <- dplyr::select(sf_sachsen(),-abflussjahr,-wert_in_cm_unter_gelande,-messwert_in_cm_unter_messpunkt) %>%
+        filter(mkz %in% sf_selected()) %>%
+        dplyr::select(-hw,-mhw,-mw,-mnw,-nw,-messzeitpunkt,-einheit,-wert)
+      
     } else {
       if (input$marker_loc=="Sachsen"){
 
@@ -480,10 +524,30 @@ server <- function(input, output, session){
       click$id
   })
   
+  mkz2date <- function(data,period_len){
+    joined_data <- period_len[mkz==data$mkz]
+    start_year <- joined_data$min_date
+    end_year <- joined_data$max_date
+    clean_data <- data[,-1]
+    final_data <- clean_data[,order(as.numeric(names(clean_data)))]
+    start_index <- which(as.numeric(names(final_data))==start_year)
+    end_index <- which(as.numeric(names(final_data))==end_year)
+    values <- unlist(final_data[,start_index:end_index])
+    if (length(values)<4){
+      return(NULL)
+    } else if (sum(is.na(unlist(final_data[,start_index:end_index])))>0){
+      return(ts(na.approx(values),start = start_year,end=end_year))
+    } 
+    return(ts(unlist(values),start = start_year,end=end_year))
+  }
+  
   pal_fun <-colorNumeric("viridis",NULL)
   pal_fun2 <-colorNumeric("viridis",NULL,na.color = NA)
   pal_th <-colorNumeric("viridis",NULL)
+  pal_alt <- colorFactor("viridis",NULL)
   d_pal_fun <- colorFactor(c(col_sachsen,col_sachsen_anhalt),NULL)
+  
+
   
   popup_content_descr_sachsen <- reactive({
     paste("<strong>HW: </strong>",sf_sachsen()$hw,unit_values,"<br>",
@@ -555,6 +619,10 @@ server <- function(input, output, session){
           "<strong>Kennzeichnungsnummer:</strong>",sf_all()$mkz)
   })
   
+  alt_popup_sachsen <- reactive({
+    paste("<strong>Hoehensystem:</strong>",sf_sachsen()$hohensystem)
+  })
+  
   output$map <- renderLeaflet({
     
     shiny::validate(
@@ -579,7 +647,7 @@ server <- function(input, output, session){
         addTiles()  
     }
     
-    if (input$show_descr_values & !input$show_period & !input$show_th){
+    if (input$show_descr_values & !input$show_period & !input$show_th & !input$show_alt & !input$show_cluster){
       if (input$interpolation){
           leaflet() %>%
           #addProviderTiles(provider=providers$OpenStreetMap)  %>%
@@ -647,7 +715,7 @@ server <- function(input, output, session){
                       title = paste0(input$descr_values," [",unit_values,"]")) 
         } 
       }
-    } else if (!input$show_descr_values & input$show_period & !input$show_th) {
+    } else if (!input$show_descr_values & input$show_period & !input$show_th & !input$show_alt & !input$show_cluster) {
       if (input$marker_loc=="Sachsen"){
         time_properties_sachsen() %>%
           leaflet() %>%
@@ -716,7 +784,7 @@ server <- function(input, output, session){
                     title = period2title(input$period)) 
       }
       
-    } else if (input$show_th & !input$show_descr_values & !input$show_period ){
+    } else if (input$show_th & !input$show_descr_values & !input$show_period & !input$show_alt & !input$show_cluster){
       
       if (input$marker_loc=="Sachsen"){
         leaflet() %>%
@@ -785,6 +853,33 @@ server <- function(input, output, session){
           addLegend("bottomright",pal = pal_th,values = th_poly_all()$area,opacity = 1,title = "Flaeche [km<sup>2</sup>]")
       }
       
+    } else if (input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_cluster){
+      temp_leaflet %>%
+        addCircleMarkers(
+          radius = 2,
+          stroke = T,
+          opacity = 1,
+          layerId = sf_sachsen()$mkz,
+          color = ~pal_alt(hohensystem),
+          popup = alt_popup_sachsen()) %>%
+        addDrawToolbar(
+          targetGroup='draw',
+          polylineOptions=FALSE,
+          markerOptions = FALSE,
+          circleOptions = F,
+          polygonOptions = F,
+          circleMarkerOptions = F) %>%
+        hideGroup("draw") %>%
+        addLegend("bottomright",pal = pal_alt,values = ~hohensystem,opacity = 1,title = "Hoehensystem")
+    } else if (input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period){
+      cluster_df <- ts_
+      if (input$marker_loc=="Sachsen"){
+        
+      } else if (input$marker_loc=="Sachsen Anhalt"){
+        
+      } else {
+        
+      }
     } else {
       if (input$marker_loc=="Sachsen"){
         temp_leaflet %>%
@@ -989,6 +1084,97 @@ server <- function(input, output, session){
     } else {
       paste("Anzahl an ausgewaehlten Objekten: ",0)
     }
+  })
+  
+  cluster_list <- eventReactive(input$calculate_cluster,{
+    if (input$marker_loc_meta4=="Sachsen"){
+      ts_mat<- as_tibble(df_sachsen()[!is.na(hw)][,.(datum=messzeitpunkt,wert,mkz)]) %>%
+        mutate(datum=as.Date(datum)) %>%
+        mutate(year=year(datum),
+               mons=format(datum,format="%m.%Y")) %>%
+        group_by(mkz,year) %>%
+        summarize(mean_gw=mean(wert,na.rm = T)) %>%
+        pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA)
+      
+      period_len <- df_sachsen()[,.(min_date=year(min(messzeitpunkt)),max_date=year(max(messzeitpunkt))),by=.(mkz)]
+    } else if (input$marker_loc_meta4=="Sachsen Anhalt"){
+      ts_mat<- as_tibble(df_sachsen_anhalt()[!is.na(hw)][,.(datum=messzeitpunkt,wert,mkz)]) %>%
+        mutate(datum=as.Date(datum)) %>%
+        mutate(year=year(datum),
+               mons=format(datum,format="%m.%Y")) %>%
+        group_by(mkz,year) %>%
+        summarize(mean_gw=mean(wert,na.rm = T)) %>%
+        pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA) 
+      
+      period_len <- df_sachsen_anhalt()[,.(min_date=year(min(messzeitpunkt)),max_date=year(max(messzeitpunkt))),by=.(mkz)]
+    } else {
+      ts_mat<- as_tibble(df_all()[!is.na(hw)][,.(datum=messzeitpunkt,wert,mkz)]) %>%
+        mutate(datum=as.Date(datum)) %>%
+        mutate(year=year(datum),
+               mons=format(datum,format="%m.%Y")) %>%
+        group_by(mkz,year) %>%
+        summarize(mean_gw=mean(wert,na.rm = T)) %>%
+        pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA)
+      
+      period_len <- df_all()[,.(min_date=year(min(messzeitpunkt)),max_date=year(max(messzeitpunkt))),by=.(mkz)]
+    }
+    
+    series <- ts_mat %>%
+      group_split()
+    
+    series_size <- lapply(series,function(x) mkz2date(x,period_len = period_len))
+    too_few <- which(sapply(series_size,function(x) any(is.null(x)))==T)
+    filtered_series <- series_size[-too_few]
+    cmp_list <- vector("list",input$boundaries[2]-input$boundaries[1])
+    vec <- seq(input$boundaries[1],input$boundaries[2])
+    
+    if (input$cluster_type!="hierarchical"){
+      for (i in 1:length(vec)){
+        cmp_list[[i]] <- tsclust(filtered_series,k=vec[i],distance = input$distance,centroid = input$centroid,preproc = zscore,trace=T)
+      } 
+    } else {
+      for (i in input$boundaries[1]:input$boundaries[2]){
+        cmp_list[[i]] <- tsclust(filtered_series,k=vec[i],type="h",distance = input$distance,control=hierarchical_control(method = input$controls),preproc = zscore,trace = T,
+                                 centroid = shape_extraction) 
+      }
+    }
+    
+    cmp_list
+  })
+  
+  cluster_eval <- eventReactive(input$calculate_cluster,{
+      shiny::validate(
+        need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
+      )
+    
+      bind_rows(lapply(cluster_list(),function(x) cvi(x))) %>%
+        add_column(k=seq(input$boundaries[1],input$boundaries[2]))
+    
+  })
+  
+  output$kmeans <- renderDataTable({
+      cluster_eval()
+  })
+  
+  output$clusters <- renderPlot({
+    start_index <- (input$k - input$boundaries[1]) + 1
+    if (input$cluster_type=="hierarchical"){
+      plot(cluster_list()[[start_index]],type="sc") 
+    } else {
+      plot(cluster_list()[[start_index]]) 
+    }
+  })
+  
+  output$cluster_overview <- renderPlot({
+    start_index <- (input$k - input$boundaries[1]) + 1
+    cluster_list()[[start_index]]@clusinfo %>%
+      rowid_to_column("id") %>%
+      mutate(id=fct_reorder(as.factor(id),av_dist)) %>%
+      mutate(av_dist=as.factor(round(av_dist,1))) %>%
+      ggplot(aes(id,size,fill=av_dist))+
+      scale_fill_viridis_d("Varianz") +
+      geom_col()+
+      labs(x="Cluster",y="Anzahl an Messstellen")
   })
   
   output$download_selected <- downloadHandler(
