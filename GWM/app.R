@@ -1,3 +1,5 @@
+options(rgl.useNULL=T)
+
 library(shiny)
 library(shinydashboard)
 library(colourpicker)
@@ -14,6 +16,12 @@ library(leaflet.extras)
 library(rgdal)
 library(gstat)
 library(factoextra)
+library(trend)
+library(trend)
+library(zoo)
+library(rayshader)
+library(rgl)
+library(rglwidget)
 
 ui <- dashboardPage(skin = "black",
   dashboardHeader(title = span(tagList(icon("tint"),"GWM"))),
@@ -27,7 +35,7 @@ ui <- dashboardPage(skin = "black",
   ),
   dashboardBody(id="container_all",
     tags$head(
-      tags$style(type="text/css","#option_panel {max-height: 650px;overflow-y:auto;overflow-x:hidden;}")
+      tags$style(type="text/css","#option_panel {max-height: 520px;overflow-y:auto;overflow-x:hidden;}")
     ),
     tabItems(
       tabItem(tabName = "upload_data",
@@ -57,14 +65,16 @@ ui <- dashboardPage(skin = "black",
                                                                choices = c("HW","MHW","MW","MNW","NW"),
                                                                selected = "HW")),
                                                    tags$style(type="text/css","#descr_container {color:#9dbccf;}"),
-                                                   div(id="interpolation_container",checkboxInput("interpolation",label = "Ordinary Kriging")),
+                                                   div(id="interpolation_container",checkboxInput("interpolation",label = strong("Ordinary Kriging"))),
                                                    tags$style(type="text/css","#interpolation_container {color:#9dbccf;}"),
                                                    div(id="res_container",sliderInput("interpolation_res","Aufloesung des Interpolation-Rasters [m]",min = 1000,max=15000,value = 2500)),
                                                    tags$style(type="text/css","#res_container {color:#9dbccf;}"),
-                                                   helpText("Die Berechnung kann einige Zeit in Anspruch nehmen")),
+                                                   helpText("Die Berechnung kann einige Zeit in Anspruch nehmen"),
+                                                   div(id="rayshader_container",checkboxInput("rayshader",label = strong("Rayshader"))),
+                                                   tags$style(type="text/css","#rayshader_container {color:#9dbccf;}")),
                                   checkboxInput("show_outliers",label = strong("Ausreisser ausblenden")),
-                                  conditionalPanel("input.show_outliers==true",div(id="outliers_container",numericInput("outliers_lower",label = "Untere Grenze [m u. GOK]",min = -1000,max=1000,value=-1000),
-                                                                                   numericInput("outliers_upper",label = "Obere Grenze [m u. GOK]",min = -1000,max=1000,value=1000)),
+                                  conditionalPanel("input.show_outliers==true",div(id="outliers_container",numericInput("outliers_lower",label = strong("Untere Grenze [m u. GOK]"),min = -1000,max=1000,value=-100),
+                                                                                   numericInput("outliers_upper",label = strong("Obere Grenze [m u. GOK]"),min = -1000,max=1000,value=100)),
                                                    tags$style(type="text/css","#outliers_container {color:#9dbccf;}")),
                                   checkboxInput("show_period",label=strong("Zeitreiheneigenschaften zeigen")),
                                   conditionalPanel("input.show_period==true",
@@ -75,22 +85,39 @@ ui <- dashboardPage(skin = "black",
                                   checkboxInput("show_th",label=strong("Thiessens Polygone zeigen")),
                                   conditionalPanel("input.marker_loc=='Sachsen'",checkboxInput("show_alt",label=strong("Hoehensysteme anzeigen"))),
                                   checkboxInput("show_time_series",label=strong("Zeitreihen zeigen")),
-                                  conditionalPanel("input.show_time_series==true",div(id="df_years_container",dateRangeInput("df_years",label="Jahre der Zeitreihen",start = "1900-01-01",end="2021-01-01",
+                                  conditionalPanel("input.show_time_series==true",div(id="df_years_container",dateRangeInput("df_years",label=strong("Jahre der Zeitreihen"),start = "1900-01-01",end="2021-01-01",
                                                                      format="dd.mm.yyyy",separator = " - ")),
                                                    tags$style(type="text/css","#df_years_container {color:#9dbccf;}")),
                                   checkboxInput("show_cluster",label=strong("Cluster")),
                                   conditionalPanel("input.show_cluster==true",
-                                                   sliderInput("k_map",label=strong("K"),min = 2,max=10,value = 3)),
+                                                   div(id="cluster_filter_container",checkboxInput("cluster_filter",label=strong("Filtern"))),
+                                                   tags$style(type="text/css","#cluster_filter_container {color:#9dbccf;}"),
+                                                   helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert"),
+                                                   div(id="k_map_container",sliderInput("k_map",label=strong("K"),min = 2,max=10,value = 3)),
+                                                   tags$style(type="text/css","#k_map_container {color:#9dbccf;}")),
+                                  checkboxInput("show_trend",label = strong("Trends")),
+                                  conditionalPanel("input.show_trend==true",
+                                                   div(id="trend_last_container",checkboxInput("trend_last",label = strong("Fuer die letzten 10 Jahre"))),
+                                                   tags$style(type="text/css","#trend_last_container {color:#9dbccf;}"),
+                                                   helpText("Zeitreihen muessen mindestens 10 Jahre lang sein")),
                                   br(),
                                   textOutput("no_selected"),
                                   br(),
-                                  column(width=12,offset=1,downloadButton("download_selected","Shapefiles exportieren")))),
+                                  column(width=12,offset=1,downloadButton("download_selected","Shapefiles exportieren")),
+                                  br(),
+                                  br())),
               conditionalPanel("input.show_time_series==true",
                                absolutePanel(fixed = TRUE,
                                              draggable = TRUE, top = 150, left=800 ,right = "auto", bottom = "auto",
                                              width = 1500, height = "auto", style = "opacity: 1; z-index: 10;",
                                              box(background = "navy",plotOutput("time_series")))),
+              conditionalPanel("input.rayshader==true",
+                               absolutePanel(fixed = TRUE,
+                                             draggable = F, top = 160, left=600 ,right = "auto", bottom = "auto",
+                                             width = "auto", height = "auto", style = "opacity: 1; z-index: 10;",
+                                             box(background = "navy",rglwidgetOutput("gw_surface")))),
               tags$style(type = "text/css", "#map {height: calc(100vh - 80px) !important;}"),
+              conditionalPanel("input"),
               leafletOutput("map"))
       ),
       tabItem(tabName = "selected_tab",
@@ -143,6 +170,7 @@ server <- function(input, output, session){
   options(shiny.maxRequestSize=1e9)
   options(scipen=999)
   options(shiny.sanitize.errors = FALSE)
+  set.seed(400)
   
   col_sachsen <- viridis::viridis(3)[2]#"#EEAD0E" 
   col_sachsen_anhalt <- viridis::viridis(3)[3]#"#009ACD"
@@ -409,9 +437,10 @@ server <- function(input, output, session){
       need(!is.null(sf_selected())," ")
       
     )
-
     
-    if (input$show_descr_values & !input$show_period & !input$show_th){
+    #input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_cluster & !input$show_trend
+    
+    if (input$show_descr_values & !input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend){
       if (input$marker_loc=="Sachsen"){
         
         selected_shp$data <- sf_sachsen() %>%
@@ -430,7 +459,7 @@ server <- function(input, output, session){
           filter(mkz %in% sf_selected()) %>%
           dplyr::select(mkz,messstellenname,hw,mhw,mw,mnw,nw,loc)
       }
-    } else if (!input$show_descr_values & input$show_period & !input$show_th) {
+    } else if (!input$show_descr_values & input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend) {
       if (input$marker_loc=="Sachsen"){
         
         selected_shp$data <- time_properties_sachsen() %>%
@@ -451,7 +480,7 @@ server <- function(input, output, session){
         
       }
 
-    } else if (input$show_th & !input$show_descr_values & !input$show_period ){
+    } else if (input$show_th & !input$show_descr_values & !input$show_period & !input$show_alt & !input$show_cluster & !input$show_trend){
 
       if (input$marker_loc=="Sachsen"){
         selected_shp$data <- th_poly_sachsen() %>%
@@ -475,12 +504,42 @@ server <- function(input, output, session){
         
       }
 
-    } else if (input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period){
+    } else if (input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_cluster & !input$show_trend){
       
       selected_shp$data <- dplyr::select(sf_sachsen(),-abflussjahr,-wert_in_cm_unter_gelande,-messwert_in_cm_unter_messpunkt) %>%
         filter(mkz %in% sf_selected()) %>%
         dplyr::select(-hw,-mhw,-mw,-mnw,-nw,-messzeitpunkt,-einheit,-wert)
       
+    } else if (!input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & input$show_cluster & !input$show_trend){
+      
+      cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(scale(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)]),input$k_map,nstart=25)$cluster)]
+      if (input$marker_loc=="Sachsen"){
+        
+        selected_shp$data <- sf_sachsen() %>%
+          filter(mkz %in% sf_selected()) %>%
+          left_join(cluster_df,by="mkz") %>%
+          dplyr::select(mkz,messstellenname,cluster)
+        
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+        
+        selected_shp$data <- sf_sachsen_anhalt() %>%
+          filter(mkz %in% sf_selected()) %>%
+          left_join(cluster_df,by="mkz") %>%
+          dplyr::select(mkz,messstellenname,cluster)
+      } else {
+        
+        selected_shp$data <- sf_all() %>%
+          filter(mkz %in% sf_selected()) %>%
+          left_join(cluster_df,by="mkz") %>%
+          dplyr::select(mkz,messstellenname,cluster)
+      }
+      
+    } else if (!input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_cluster & input$show_trend){
+      
+      selected_shp$data <- sf_sign() %>%
+        filter(mkz %in% sf_selected()) %>%
+        dplyr::select(mkz,messstellenname,p_value,slope)
+
     } else {
       if (input$marker_loc=="Sachsen"){
 
@@ -531,23 +590,6 @@ server <- function(input, output, session){
 
       click$id
   })
-  
-  mkz2date <- function(data,period_len){
-    joined_data <- period_len[mkz==data$mkz]
-    start_year <- joined_data$min_date
-    end_year <- joined_data$max_date
-    clean_data <- data[,-1]
-    final_data <- clean_data[,order(as.numeric(names(clean_data)))]
-    start_index <- which(as.numeric(names(final_data))==start_year)
-    end_index <- which(as.numeric(names(final_data))==end_year)
-    values <- unlist(final_data[,start_index:end_index])
-    if (length(values)<4){
-      return(NULL)
-    } else if (sum(is.na(unlist(final_data[,start_index:end_index])))>0){
-      return(ts(na.approx(values),start = start_year,end=end_year))
-    } 
-    return(ts(unlist(values),start = start_year,end=end_year))
-  }
   
   pal_fun <-colorNumeric("viridis",NULL,na.color = NA)
   pal_fun2 <-colorNumeric("viridis",NULL,na.color = NA)
@@ -631,6 +673,11 @@ server <- function(input, output, session){
     paste("<strong>Hoehensystem:</strong>",sf_sachsen()$hohensystem)
   })
   
+  trend_popup <- reactive({
+    paste("<strong>Sen-Steigung:</strong>",round(sf_sign()$slope,5),"<br>",
+          "<strong>P-Wert Kendall-Test</strong>",round(sf_sign()$p_value,5))
+  })
+  
   output$map <- renderLeaflet({
     
     shiny::validate(
@@ -655,7 +702,7 @@ server <- function(input, output, session){
         addTiles()  
     }
     
-    if (input$show_descr_values & !input$show_period & !input$show_th & !input$show_alt & !input$show_cluster){
+    if (input$show_descr_values & !input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend){
       if (input$interpolation){
           leaflet() %>%
           #addProviderTiles(provider=providers$OpenStreetMap)  %>%
@@ -724,7 +771,7 @@ server <- function(input, output, session){
                       title = paste0(input$descr_values," [",unit_values,"]")) 
         } 
       }
-    } else if (!input$show_descr_values & input$show_period & !input$show_th & !input$show_alt & !input$show_cluster) {
+    } else if (!input$show_descr_values & input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend) {
       if (input$marker_loc=="Sachsen"){
         time_properties_sachsen() %>%
           leaflet() %>%
@@ -793,7 +840,7 @@ server <- function(input, output, session){
                     title = period2title(input$period)) 
       }
       
-    } else if (input$show_th & !input$show_descr_values & !input$show_period & !input$show_alt & !input$show_cluster){
+    } else if (input$show_th & !input$show_descr_values & !input$show_period & !input$show_alt & !input$show_cluster & !input$show_trend){
       
       if (input$marker_loc=="Sachsen"){
         leaflet() %>%
@@ -805,7 +852,6 @@ server <- function(input, output, session){
                       color="grey",
                       fillColor = ~pal_th(area),
                       popup = th_sachsen_popup(),
-                      layerId = th_poly_sachsen()$area,
                       stroke = T,
                       weight = 1) %>%
           addDrawToolbar(
@@ -862,7 +908,7 @@ server <- function(input, output, session){
           addLegend("bottomright",pal = pal_th,values = th_poly_all()$area,opacity = 1,title = "Flaeche [km<sup>2</sup>]")
       }
       
-    } else if (input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_cluster){
+    } else if (input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_cluster & !input$show_trend){
       temp_leaflet %>%
         addCircleMarkers(
           radius = 2,
@@ -880,9 +926,8 @@ server <- function(input, output, session){
           circleMarkerOptions = F) %>%
         hideGroup("draw") %>%
         addLegend("bottomright",pal = pal_alt,values = ~hohensystem,opacity = 1,title = "Hoehensystem")
-    } else if (input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period){
-      cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)],input$k_map,nstart=25)$cluster)]
-      print(head(cluster_df))
+    } else if (input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_trend){
+      cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(scale(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)]),input$k_map,nstart=25)$cluster)]
       if (input$marker_loc=="Sachsen"){
         
         pts_cluster <- sf_sachsen() %>%
@@ -898,6 +943,14 @@ server <- function(input, output, session){
             layerId = sf_sachsen()$mkz,
             color = ~pal_alt(cluster),
             popup = default_popup_sachsen()) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal=pal_alt,values = ~cluster,opacity = 1,title = "Cluster")
         
       } else if (input$marker_loc=="Sachsen-Anhalt"){
@@ -914,6 +967,14 @@ server <- function(input, output, session){
             layerId = sf_sachsen_anhalt()$mkz,
             color = ~pal_alt(cluster),
             popup = default_popup_sachsen_anhalt()) %>%
+        addDrawToolbar(
+          targetGroup='draw',
+          polylineOptions=FALSE,
+          markerOptions = FALSE,
+          circleOptions = F,
+          polygonOptions = F,
+          circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal=pal_alt,values = ~cluster,opacity = 1,title = "Cluster")
         
       } else {
@@ -930,9 +991,38 @@ server <- function(input, output, session){
             layerId = sf_all()$mkz,
             color = ~pal_alt(cluster),
             popup = default_popup_all()) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=FALSE,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F) %>%
+          hideGroup("draw") %>%
           addLegend("bottomright",pal=pal_alt,values = ~cluster,opacity = 1,title = "Cluster")
       }
       
+    } else if (input$show_trend & !input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period) {
+      sf_sign() %>%
+        leaflet() %>%
+        addTiles() %>%
+        addCircleMarkers(
+          radius = 2,
+          stroke = T,
+          opacity = 1,
+          color = ~pal_fun(slope),
+          layerId = sf_sign()$mkz,
+          popup = trend_popup()
+        ) %>%
+        addDrawToolbar(
+          targetGroup='draw',
+          polylineOptions=FALSE,
+          markerOptions = FALSE,
+          circleOptions = F,
+          polygonOptions = F,
+          circleMarkerOptions = F) %>%
+        hideGroup("draw") %>%
+        addLegend("bottomright",pal=pal_fun,values=~slope,opacity = 1,title = "San-Steigung")
     } else {
       if (input$marker_loc=="Sachsen"){
         temp_leaflet %>%
@@ -1095,17 +1185,19 @@ server <- function(input, output, session){
     
     if (input$marker_loc_meta3=="Sachsen"){
       cmp_mean <- df_sachsen()[,.(cmp_mean_gw=mean(wert)),by=.(mkz)]
-      gw_change_temp <- cmp_mean[(df_sachsen()[,.(year=year(messzeitpunkt),wert,mkz)][,.(mean_gw=mean(wert)),by=.(mkz,year)]),on="mkz"][,`:=`(gw_change=cmp_mean_gw-mean_gw)] 
-      breaks <- c(rev(c(0,1, round(abs(min(gw_change_temp$gw_change,na.rm = T)),0)-20))*-1,c(0, 1, round(max(gw_change_temp$gw_change,na.rm = T),0)-20))
+      gw_change_temp <- cmp_mean[(df_sachsen()[,.(year=year(messzeitpunkt),wert,mkz)][,.(mean_gw=mean(wert)),by=.(mkz,year)]),on="mkz"][,`:=`(gw_change=cmp_mean_gw-mean_gw)]
+      #breaks <- c(rev(c(0,1, round(abs(min(gw_change_temp$gw_change,na.rm = T)),0)-20))*-1,c(0, 1, round(max(gw_change_temp$gw_change,na.rm = T),0)-20))
     } else if (input$marker_loc_meta3=="Sachsen-Anhalt"){
       cmp_mean <- df_sachsen_anhalt()[,.(cmp_mean_gw=mean(wert)),by=.(mkz)]
-      gw_change_temp <- cmp_mean[(df_sachsen_anhalt()[,.(year=year(messzeitpunkt),wert,mkz)][,.(mean_gw=mean(wert)),by=.(mkz,year)]),on="mkz"][,`:=`(gw_change=cmp_mean_gw-mean_gw)] 
-      breaks <- c(rev(c(0,1, round(abs(min(gw_change_temp$gw_change,na.rm = T)),0)-20))*-1,c(0, 1, round(max(gw_change_temp$gw_change,na.rm = T),0)-20))
+      gw_change_temp <- cmp_mean[(df_sachsen_anhalt()[,.(year=year(messzeitpunkt),wert,mkz)][,.(mean_gw=mean(wert)),by=.(mkz,year)]),on="mkz"][,`:=`(gw_change=cmp_mean_gw-mean_gw)]
+      #breaks <- c(rev(c(0,1, round(abs(min(gw_change_temp$gw_change,na.rm = T)),0)-20))*-1,c(0, 1, round(max(gw_change_temp$gw_change,na.rm = T),0)-20))
     } else {
       cmp_mean <- df_all()[,.(cmp_mean_gw=mean(wert)),by=.(mkz)]
-      gw_change_temp <- cmp_mean[(df_all()[,.(year=year(messzeitpunkt),wert,mkz)][,.(mean_gw=mean(wert)),by=.(mkz,year)]),on="mkz"][,`:=`(gw_change=cmp_mean_gw-mean_gw)] 
-      breaks <- c(rev(c(0,1, round(abs(min(gw_change_temp$gw_change,na.rm = T)),0)-20))*-1,c(0, 1, round(max(gw_change_temp$gw_change,na.rm = T),0)-20))
+      gw_change_temp <- cmp_mean[(df_all()[,.(year=year(messzeitpunkt),wert,mkz)][,.(mean_gw=mean(wert)),by=.(mkz,year)]),on="mkz"][,`:=`(gw_change=cmp_mean_gw-mean_gw)]
+      #breaks <- c(rev(c(0,1, round(abs(min(gw_change_temp$gw_change,na.rm = T)),0)-20))*-1,c(0, 1, round(max(gw_change_temp$gw_change,na.rm = T),0)-20))
     }
+    
+    breaks <- c(-10,-1,-0.1,0,0.1,1,10)
     
     gw_change_temp %>%
       filter(year>=year(input$gw_change_years[1]) & year<=year(input$gw_change_years[2])) %>%
@@ -1140,46 +1232,181 @@ server <- function(input, output, session){
   })
 
   df_var <- reactive({
-    if (input$marker_loc_meta4=="Sachsen"){
-      df_sachsen()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
-      # df <- df_sachsen() %>%
-      #   group_by(mkz) %>%
-      #   summarize(count=n()) %>%
-      #   filter(count>3) %>%
-      #   pull(mkz)
-      # df_sachsen()[complete.cases(df_sachsen()),][mkz %in% df][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var),p_value=mk.test(wert)$p.value),by=.(mkz)]
-    } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
-      df_sachsen_anhalt()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+    if (input$cluster_filter){
+      
+      if (input$marker_loc_meta4=="Sachsen"){
+        mkz_filtered <- df_sachsen()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
+        df_sachsen()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
+        mkz_filtered <- df_sachsen_anhalt()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
+        df_sachsen_anhalt()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } else {
+        mkz_filtered <- df_sachsen_all()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
+        df_all()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      }
     } else {
-      df_all()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      if (input$marker_loc_meta4=="Sachsen"){
+        df_sachsen()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
+        df_sachsen_anhalt()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } else {
+        df_all()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } 
     }
   })
   
   df_var_map <- reactive({
-    if (input$marker_loc=="Sachsen"){
-      df_sachsen()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
-      #df_sachsen()[,.(mw,wert,mkz)][,.(var=var(wert)),by=.(mkz)]
-      #df_sachsen()[complete.cases(df_sachsen()),][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),p_value=mk.test(wert)$p.value),by=.(mkz)]
-      # df <- df_sachsen() %>%
-      #   group_by(mkz) %>%
-      #   summarize(count=n()) %>%
-      #   filter(count>3) %>%
-      #   pull(mkz)
-      # df_sachsen()[complete.cases(df_sachsen()),][mkz %in% df][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var),p_value=mk.test(wert)$p.value),by=.(mkz)]
-    } else if (input$marker_loc=="Sachsen-Anhalt"){
-      df_sachsen_anhalt()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
-      #df_sachsen_anhalt()[,.(mw,wert,mkz)][,.(var=var(wert)),by=.(mkz)]
-      # df <- df_sachsen_anhalt() %>%
-      #   group_by(mkz) %>%
-      #   summarize(count=n()) %>%
-      #   filter(count>3) %>%
-      #   pull(mkz)
-      # df_sachsen_anhalt()[complete.cases(df_sachsen_anhalt()),][mkz %in% df][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var),p_value=mk.test(wert)$p.value),by=.(mkz)]
+    if (input$cluster_filter){
+      if (input$marker_loc=="Sachsen"){
+        mkz_filtered <- df_sachsen()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
+        df_sachsen()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+        mkz_filtered <- df_sachsen_anhalt()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
+        df_sachsen_anhalt()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } else {
+        mkz_filtered <- df_all()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
+        df_all()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } 
     } else {
-      df_all()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
-      #df_all()[,.(mw,wert,mkz)][,.(var=var(wert)),by=.(mkz)]
+      if (input$marker_loc=="Sachsen"){
+        df_sachsen()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+        df_sachsen_anhalt()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      } else {
+        df_all()[,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
+      }
     }
   })
+  
+  mkz2date <- function(data,period_len,filter=F,start_year=NULL){
+    joined_data <- period_len[mkz==data$mkz]
+    if (filter){
+      start_year <- start_year
+    } else {
+      start_year <- joined_data$min_date 
+    }
+    end_year <- joined_data$max_date
+    clean_data <- data[,-1]
+    final_data <- clean_data[,order(as.numeric(names(clean_data)))]
+    start_index <- which(as.numeric(names(final_data))==start_year)
+    end_index <- which(as.numeric(names(final_data))==end_year)
+    values <- unlist(final_data[,start_index:end_index])
+    if (length(values)<10){
+      return(NULL)
+    } else if (sum(is.na(unlist(final_data[,start_index:end_index])))>0 & any(!is.na(unlist(final_data[,start_index:end_index])))){
+      return(ts(na.approx(values),start = start_year,end=end_year))
+    } 
+    return(ts(unlist(values),start = start_year,end=end_year))
+  }
+  
+  sf_sign <- reactive({
+    if (input$marker_loc=="Sachsen"){
+      if (input$trend_last){
+        ts_mat <- as_tibble(df_sachsen()[,.(datum=messzeitpunkt,wert,mkz)]) %>%
+          mutate(datum=as.Date(datum)) %>%
+          mutate(year=year(datum)) %>%
+          filter(year>=2011) %>%
+          group_by(mkz,year) %>%
+          summarize(mean_gw=mean(wert,na.rm = T)) %>%
+          pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA)
+      } else {
+        ts_mat <- as_tibble(df_sachsen()[,.(datum=messzeitpunkt,wert,mkz)]) %>%
+          mutate(datum=as.Date(datum)) %>%
+          mutate(year=year(datum)) %>%
+          group_by(mkz,year) %>%
+          summarize(mean_gw=mean(wert,na.rm = T)) %>%
+          pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA) 
+      }
+      
+      period_len <- df_sachsen()[,.(min_date=year(min(messzeitpunkt)),max_date=year(max(messzeitpunkt)),
+                                    period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25)),by=.(mkz)]
+    } else if (input$marker_loc=="Sachsen-Anhalt"){
+      if (input$trend_last){
+        ts_mat <- as_tibble(df_sachsen_anhalt()[,.(datum=messzeitpunkt,wert,mkz)]) %>%
+          mutate(datum=as.Date(datum)) %>%
+          mutate(year=year(datum)) %>%
+          filter(year>=2011) %>%
+          group_by(mkz,year) %>%
+          summarize(mean_gw=mean(wert,na.rm = T)) %>%
+          pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA)
+      } else {
+        ts_mat <- as_tibble(df_sachsen_anhalt()[,.(datum=messzeitpunkt,wert,mkz)]) %>%
+          mutate(datum=as.Date(datum)) %>%
+          mutate(year=year(datum)) %>%
+          group_by(mkz,year) %>%
+          summarize(mean_gw=mean(wert,na.rm = T)) %>%
+          pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA) 
+      }
+      
+      period_len <- df_sachsen_anhalt()[,.(min_date=year(min(messzeitpunkt)),max_date=year(max(messzeitpunkt)),
+                                           period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25)),by=.(mkz)]
+    } else {
+      if (input$trend_last){
+        ts_mat <- as_tibble(df_all()[,.(datum=messzeitpunkt,wert,mkz)]) %>%
+          mutate(datum=as.Date(datum)) %>%
+          mutate(year=year(datum)) %>%
+          filter(year>2011) %>%
+          group_by(mkz,year) %>%
+          summarize(mean_gw=mean(wert,na.rm = T)) %>%
+          pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA)
+      } else {
+        ts_mat <- as_tibble(df_all()[,.(datum=messzeitpunkt,wert,mkz)]) %>%
+          mutate(datum=as.Date(datum)) %>%
+          mutate(year=year(datum)) %>%
+          group_by(mkz,year) %>%
+          summarize(mean_gw=mean(wert,na.rm = T)) %>%
+          pivot_wider(id_cols = mkz,names_from=year,values_from=mean_gw,values_fill=NA)
+      }
+      
+      period_len <- df_all()[,.(min_date=year(min(messzeitpunkt)),max_date=year(max(messzeitpunkt)),
+                                period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25)),by=.(mkz)]
+    }
+    
+
+    series <- ts_mat %>%
+        group_split() 
+    
+    if (!input$trend_last){
+      series_size <- lapply(series,function(x){
+        mkz2date(x,period_len)
+      })
+      
+    } else {
+      series_size <- lapply(series,function(x){
+        mkz2date(x,period_len,filter = T,start_year = 2011)
+      })
+      
+    }
+    
+    too_few <- which(sapply(series_size,function(x) any(is.null(x))| any(is.nan(x)))==T)
+    
+    filtered_series <- series_size[-too_few]
+    
+    mk_ls <- sapply(filtered_series,function(x) mk.test(x)$p.value)
+    sens_slope_ls <- sapply(filtered_series,function(x) sens.slope(x)$estimates)
+    
+    sign_df <- tibble(mkz=ts_mat$mkz[-too_few],p_value=mk_ls,slope=unname(sens_slope_ls))
+    
+    
+    if (input$marker_loc=="Sachsen"){
+      sf_sachsen() %>%
+        left_join(sign_df,by="mkz")
+    } else if (input$marker_loc=="Sachsen-Anhalt"){
+      sf_sachsen_anhalt() %>%
+        left_join(sign_df,by="mkz")
+    } else {
+      sf_all() %>%
+        left_join(sign_df,by="mkz")
+    }
+    
+  })
+  
   
   output$cluster_plot <- renderPlot({
     
@@ -1187,11 +1414,11 @@ server <- function(input, output, session){
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
     
-    kmean_obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var,max_var)],input$k,nstart=25)
+    kmean_obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],input$k,nstart=25)
 
-    fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var,max_var)],geom = "point",
+    fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
                  ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k)) +
-      labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m u. GOK]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m u. GOK]",title = "")
+      labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")
 
   })
   
@@ -1202,13 +1429,30 @@ server <- function(input, output, session){
     )
     clust_list <- vector("list",6)
     for (i in 1:6){
-      clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(df_var()[complete.cases(df_var()),.(min_var,max_var)],i+1,nstart=25)$withinss))
+      clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(scale(df_var()[complete.cases(df_var()),.(min_var,max_var)]),i+1,nstart=25)$withinss))
     }
     bind_rows(clust_list) %>%
       ggplot(aes(clust,ss,fill=as.factor(clust)))+
       geom_col()+
       scale_fill_viridis_d("Cluster")+
       labs(x="Cluster",y="Varianz innerhalb der Cluster")
+  })
+  
+  output$gw_surface <- renderRglwidget({
+    shiny::validate(
+      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
+    )
+    
+    try(rgl.close())
+    
+    gw_surface <- raster_to_matrix(kriged())
+    gw_surface %>%
+      sphere_shade(zscale = 1) %>%
+      plot_3d(gw_surface, zscale = 1, fov = 0, theta = -45, phi = 45,
+              windowsize = c(1200, 1000), zoom = 0.75,
+              water = TRUE, waterdepth = 0, wateralpha = 0.5, watercolor = c("#785E3C"),
+              waterlinecolor = "grey", waterlinealpha = 0.8,solid=F)
+    rglwidget()
   })
   
 
