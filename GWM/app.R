@@ -35,7 +35,12 @@ ui <- dashboardPage(skin = "black",
   ),
   dashboardBody(id="container_all",
     tags$head(
-      tags$style(type="text/css","#option_panel {max-height: 520px;overflow-y:auto;overflow-x:hidden;}")
+      tags$style(type="text/css","#option_panel {max-height: 520px;overflow-y:auto;overflow-x:hidden;}"),
+      tags$style(HTML(".js-irs-0 .irs-grid-text, .js-irs-0 .irs-min, .js-irs-0 .irs-max{color:white;}")),
+      tags$style(HTML(".js-irs-1 .irs-grid-text, .js-irs-1 .irs-min, .js-irs-1 .irs-max{color:white;}")),
+      tags$style(HTML(".js-irs-2 .irs-grid-text, .js-irs-2 .irs-min, .js-irs-2 .irs-max{color:white;}")),
+      tags$style(HTML(".js-irs-3 .irs-grid-text, .js-irs-3 .irs-min, .js-irs-3 .irs-max{color:white;}")),
+      tags$style(HTML(".js-irs-4 .irs-grid-text, .js-irs-4 .irs-min, .js-irs-4 .irs-max{color:white;}"))
     ),
     tabItems(
       tabItem(tabName = "upload_data",
@@ -113,8 +118,8 @@ ui <- dashboardPage(skin = "black",
                                              box(background = "navy",plotOutput("time_series")))),
               conditionalPanel("input.rayshader==true",
                                absolutePanel(fixed = TRUE,
-                                             draggable = F, top = 160, left=600 ,right = "auto", bottom = "auto",
-                                             width = "auto", height = "auto", style = "opacity: 1; z-index: 10;",
+                                             draggable = F, top = 160, left=650 ,right = "auto", bottom = "auto",
+                                             width = 1400, height = "auto", style = "opacity: 1; z-index: 10;",
                                              box(background = "navy",rglwidgetOutput("gw_surface")))),
               tags$style(type = "text/css", "#map {height: calc(100vh - 80px) !important;}"),
               conditionalPanel("input"),
@@ -127,6 +132,8 @@ ui <- dashboardPage(skin = "black",
               ),
       tabItem(tabName = "meta_data",
               fluidRow(box(width = 12,background = "navy",column(width = 12,offset = 4,h1("Metadaten")))),
+              h3("Zeitreiheneigenschaften"),
+              br(),
               fluidRow(
                 box(width = 3,background = "navy",
                     selectInput("marker_loc_meta1",label=strong("Bundesland"),choices = c("Sachsen + Sachsen-Anhalt","Sachsen","Sachsen-Anhalt"),
@@ -144,6 +151,8 @@ ui <- dashboardPage(skin = "black",
                     conditionalPanel("input.marker_loc_meta2!='Sachsen + Sachsen-Anhalt'",
                                      colourInput("col_meta2",label = strong("Farbauswahl"),value = "#91CFEE"))),
                 box(width = 9,background = "navy",plotOutput("meta2"))),
+              h3("Veraenderung des Grundwasserstandes"),
+              br(),
               fluidRow(
                 box(width = 3,background = "navy",
                     selectInput("marker_loc_meta3",label=strong("Bundesland"),choices = c("Sachsen + Sachsen-Anhalt","Sachsen","Sachsen-Anhalt"),
@@ -151,15 +160,25 @@ ui <- dashboardPage(skin = "black",
                     dateRangeInput("gw_change_years",label="Jahre der Zeitreihen",start = "1900-01-01",end="2021-01-01",
                                    format="yyyy",separator = " - ",startview = "year")),
                 box(width = 9,background = "navy",plotOutput("meta3"))),
+              h3("Clustering"),
+              br(),
               fluidRow(
                 box(width=3,background="navy",
                     selectInput("marker_loc_meta4",label=strong("Bundesland"),choices = c("Sachsen + Sachsen-Anhalt","Sachsen","Sachsen-Anhalt"),
                                 selected = "Sachsen + Sachsen-Anhalt"),
-                    sliderInput("k",label=strong("Cluster"),min=2,max=10,value=2)),
+                    sliderInput("k",label=strong("Cluster"),min=2,max=10,value=2),
+                    checkboxInput("cluster_filter2",label=strong("Filtern")),
+                    helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert")),
                 box(width=9,background="navy",
                     plotOutput("cluster_plot"),
                     plotOutput("cluster_info"))
-                )
+                ),
+              fluidRow(
+                div(id="transparent_div",box(width=3)),
+                tags$style(type="text/css","#transparent_div {opacity: 0;}"),
+                box(width=9,background="navy",
+                    plotOutput("distances"))
+              )
             )
     )
   )
@@ -179,7 +198,9 @@ server <- function(input, output, session){
     filter(NAME_1 %in% c("Sachsen","Sachsen-Anhalt"))
   orig_crs <- st_crs(st_read("./geo_data/crs_holder_sachsen.shp"))
   orig_crs2 <- st_crs(st_read("./geo_data/crs_holder_sachsen_anhalt.shp"))
-  unit_values <- "m u. GOK"
+  distances_sachsen <- read.csv("./geo_data/distances_sachsen.csv")
+  distances_sachsen_anhalt <- read.csv("./geo_data/distances_sachsen_anhalt.csv")
+  unit_values <- "m ue. GOK"
   counter <- 1
   
   # UpdateSession
@@ -1148,7 +1169,8 @@ server <- function(input, output, session){
         scale_x_log10()+
         labs(title = "Mittleres Messintervall in Sachsen-Anhalt und Sachsen",x="Tage",y="Anzahl an Messpunkten")+
         scale_y_continuous(labels = comma)+
-        scale_fill_manual("Bundesland",values = c(col_sachsen,col_sachsen_anhalt))
+        scale_fill_viridis_d("Bundesland")
+        #scale_fill_manual("Bundesland",values = c(col_sachsen,col_sachsen_anhalt))
       }
   })
   
@@ -1173,7 +1195,8 @@ server <- function(input, output, session){
         geom_histogram(bins=input$bins_meta2,col="black")+
         labs(title="Laenge der Messreihen in Sachsen und Sachsen-Anhalt",x="Tage",y="Anzahl an Messpunkten")+
         scale_y_continuous(labels = comma)+
-        scale_fill_manual("Bundesland",values = c(col_sachsen,col_sachsen_anhalt))
+        scale_fill_viridis_d("Bundesland")
+        #scale_fill_manual("Bundesland",values = c(col_sachsen,col_sachsen_anhalt))
     }
   })
   
@@ -1232,7 +1255,7 @@ server <- function(input, output, session){
   })
 
   df_var <- reactive({
-    if (input$cluster_filter){
+    if (input$cluster_filter2){
       
       if (input$marker_loc_meta4=="Sachsen"){
         mkz_filtered <- df_sachsen()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
@@ -1434,7 +1457,7 @@ server <- function(input, output, session){
     bind_rows(clust_list) %>%
       ggplot(aes(clust,ss,fill=as.factor(clust)))+
       geom_col()+
-      scale_fill_viridis_d("Cluster")+
+      scale_fill_viridis_d("Cluster",guide=F)+
       labs(x="Cluster",y="Varianz innerhalb der Cluster")
   })
   
@@ -1447,12 +1470,51 @@ server <- function(input, output, session){
     
     gw_surface <- raster_to_matrix(kriged())
     gw_surface %>%
-      sphere_shade(zscale = 1) %>%
-      plot_3d(gw_surface, zscale = 1, fov = 0, theta = -45, phi = 45,
-              windowsize = c(1200, 1000), zoom = 0.75,
-              water = TRUE, waterdepth = 0, wateralpha = 0.5, watercolor = c("#785E3C"),
-              waterlinecolor = "grey", waterlinealpha = 0.8,solid=F)
+      sphere_shade(zscale = 1,texture = create_texture("#85BCDE", "#436A80", "#97B1D9", "#5E83BF", "#6D94C7")) %>%
+      plot_3d(gw_surface, zscale = 1, fov = 0, theta = 0, phi = 45,
+              windowsize = c(1200, 1000), zoom = 0.7,
+              water = TRUE, waterdepth = 0, wateralpha = 0.3, watercolor = c("#B0AEA9"),
+              waterlinecolor = "white", waterlinealpha = 0.8,solid=F)
     rglwidget()
+  })
+  
+  output$distances <- renderPlot({
+    shiny::validate(
+      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
+    )
+    
+    df_comp <- scale(df_var()[complete.cases(df_var()),.(min_var,max_var)])
+    kmean_obj <- kmeans(df_comp,input$k,nstart = 25)
+    
+    if (input$marker_loc_meta4=="Sachsen"){
+      final_df <- tibble(mkz=df_var()[complete.cases(df_var()),.(mkz)]$mkz,cluster=kmean_obj$cluster) %>%
+        left_join(distances_sachsen,by="mkz")
+    } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
+      final_df <- tibble(mkz=df_var()[complete.cases(df_var()),.(mkz)]$mkz,cluster=kmean_obj$cluster) %>%
+        left_join(distances_sachsen_anhalt,by="mkz")
+    } else {
+      final_df <- tibble(mkz=df_var()[complete.cases(df_var()),.(mkz)]$mkz,cluster=kmean_obj$cluster) %>%
+        left_join(rbind(distances_sachsen,distances_sachsen_anhalt),by="mkz")
+    }
+    
+    final_df_medians <- final_df %>%
+      mutate_at(vars(cluster),as.factor) %>%
+      group_by(cluster) %>%
+      summarize(median=round(median(min_dist),0),n=n())
+    
+    final_df %>%
+      mutate_at(vars(cluster),as.factor) %>%
+      mutate(cluster=fct_reorder(cluster,min_dist)) %>%
+      left_join(final_df_medians,by="cluster") %>%
+      ggplot(aes(cluster,min_dist,fill=cluster))+
+      geom_boxplot()+
+      geom_text(aes(x=cluster,y=median,label=paste("Median:",median,"m",
+                                                   "\n","Sample size:",n)),
+                size=3,vjust=-3)+
+      scale_fill_viridis_d(guide=F)+
+      theme_bw()+
+      labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau oder See [m]")
+    
   })
   
 
