@@ -459,26 +459,28 @@ server <- function(input, output, session){
     
     req(input$map_draw_stop)
     coords <- input$map_draw_new_feature$geometry$coordinates[[1]]
-    polygon <- st_polygon(list(do.call(rbind,lapply(coords,function(x){c(x[[1]][1],x[[2]][1])}))))
-  
-    if (input$show_th & !any(c(input$show_desc_values,input$show_period))){
-      if (input$marker_loc=="Sachsen"){
-        temp_shp <- th_poly_sachsen()[st_intersects(polygon,th_poly_sachsen())[[1]],] %>%
-          pull(id)
-      } else if (input$marker_loc=="Sachsen-Anhalt"){
-        temp_shp <- th_poly_sachsen_anhalt()[st_intersects(polygon,th_poly_sachsen_anhalt())[[1]],] %>%
-          pull(id)
+    if (length(coords)>=4){
+      polygon <- st_polygon(list(do.call(rbind,lapply(coords,function(x){c(x[[1]][1],x[[2]][1])}))))
+      
+      if (input$show_th & !any(c(input$show_desc_values,input$show_period))){
+        if (input$marker_loc=="Sachsen"){
+          temp_shp <- th_poly_sachsen()[st_intersects(polygon,th_poly_sachsen())[[1]],] %>%
+            pull(id)
+        } else if (input$marker_loc=="Sachsen-Anhalt"){
+          temp_shp <- th_poly_sachsen_anhalt()[st_intersects(polygon,th_poly_sachsen_anhalt())[[1]],] %>%
+            pull(id)
+        } else {
+          temp_shp <- th_poly_all()[st_intersects(polygon,th_poly_all())[[1]],] %>%
+            pull(id)        
+        }
+        
       } else {
-        temp_shp <- th_poly_all()[st_intersects(polygon,th_poly_all())[[1]],] %>%
-          pull(id)        
+        temp_shp <- sf_all()[st_intersects(polygon,sf_all())[[1]],] %>%
+          pull(mkz)
       }
-
-    } else {
-      temp_shp <- sf_all()[st_intersects(polygon,sf_all())[[1]],] %>%
-        pull(mkz)
+      
+      temp_shp 
     }
-
-    temp_shp
     
   })
   
@@ -771,7 +773,7 @@ server <- function(input, output, session){
             polygonOptions = F,
             circleMarkerOptions = F,
             rectangleOptions = F,
-            editOptions = editToolbarOptions()) #%>%
+            editOptions = editToolbarOptions(edit = F,remove = T)) #%>%
           #hideGroup("draw")
       } else {
         if (input$marker_loc=="Sachsen"){
@@ -1564,9 +1566,7 @@ server <- function(input, output, session){
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
     
-    print(sf_pts())
     points <- raster::extract(kriged(),sf_pts())
-    print(points)
     points %>%
       data.frame(elev=.) %>%
       rowid_to_column("id") %>%
