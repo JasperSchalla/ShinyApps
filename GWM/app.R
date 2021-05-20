@@ -6,6 +6,7 @@ library(colourpicker)
 library(leaflet)
 library(sf)
 library(sp)
+library(spatstat)
 library(tidyverse)
 library(htmltools)
 library(scales)
@@ -76,7 +77,9 @@ ui <- dashboardPage(skin = "black",
                                                    tags$style(type="text/css","#res_container {color:#9dbccf;}"),
                                                    helpText("Die Berechnung kann einige Zeit in Anspruch nehmen"),
                                                    div(id="rayshader_container",checkboxInput("rayshader",label = strong("Rayshader"))),
-                                                   tags$style(type="text/css","#rayshader_container {color:#9dbccf;}")),
+                                                   tags$style(type="text/css","#rayshader_container {color:#9dbccf;}"),
+                                                   div(id="profile_container",checkboxInput("show_profile",label=strong("Profil"))),
+                                                   tags$style(type="text/css","#profile_container {color:#9dbccf;}")),
                                   checkboxInput("show_outliers",label = strong("Ausreisser ausblenden")),
                                   conditionalPanel("input.show_outliers==true",div(id="outliers_container",numericInput("outliers_lower",label = strong("Untere Grenze [m u. GOK]"),min = -1000,max=1000,value=-100),
                                                                                    numericInput("outliers_upper",label = strong("Obere Grenze [m u. GOK]"),min = -1000,max=1000,value=100)),
@@ -119,8 +122,13 @@ ui <- dashboardPage(skin = "black",
               conditionalPanel("input.rayshader==true",
                                absolutePanel(fixed = TRUE,
                                              draggable = F, top = 160, left=650 ,right = "auto", bottom = "auto",
-                                             width = 1400, height = "auto", style = "opacity: 1; z-index: 10;",
+                                             width = 1150, height = "auto", style = "opacity: 1; z-index: 10;",
                                              box(background = "navy",rglwidgetOutput("gw_surface")))),
+              conditionalPanel("input.show_profile==true",
+                               absolutePanel(fixed = TRUE,
+                                             draggable = TRUE, top = 150, left=800 ,right = "auto", bottom = "auto",
+                                             width = 1500, height = "auto", style = "opacity: 1; z-index: 10;",
+                                             box(background = "navy",plotOutput("profile")))),
               tags$style(type = "text/css", "#map {height: calc(100vh - 80px) !important;}"),
               conditionalPanel("input"),
               leafletOutput("map"))
@@ -424,7 +432,30 @@ server <- function(input, output, session){
     
   })
   
+  sf_pts <- reactive({
+    
+    shiny::validate(
+      need(input$interpolation,"")
+    )
+    
+    req(input$map_draw_stop)
+    coords <- input$map_draw_new_feature$geometry$coordinates
+    data_line <- do.call(rbind,lapply(coords,function(x){c(x[[1]][1],x[[2]][1])}))
+    drawn_line <- st_as_sf(data.frame(x=data_line[,1],y=data_line[,2]),coords=c("x","y"),crs=st_crs(germany)) %>%
+      st_transform(raster::crs(kriged())) %>%
+      st_coordinates()  %>%
+      Line()
+    pts <- as.SpatialPoints.ppp(pointsOnLines(as(drawn_line,"psp"),input$interpolation_res))
+    proj4string(pts) <- raster::crs(kriged())
+    pts
+
+  })
+  
   sf_selected <- reactive({
+    
+    shiny::validate(
+      need(!input$interpolation,"")
+    )
     
     req(input$map_draw_stop)
     coords <- input$map_draw_new_feature$geometry$coordinates[[1]]
@@ -729,8 +760,18 @@ server <- function(input, output, session){
           #addProviderTiles(provider=providers$OpenStreetMap)  %>%
           addTiles() %>%
           addRasterImage(kriged(),colors = pal_fun2,opacity = 0.7) %>%
-          addLegend("bottomright",pal=pal_fun2,values=raster::values(kriged()),
-                    title = paste0(input$descr_values," [",unit_values,"]"))
+          addLegend("topright",pal=pal_fun2,values=raster::values(kriged()),
+                    title = paste0(input$descr_values," [",unit_values,"]")) %>%
+          addDrawToolbar(
+            targetGroup='draw',
+            polylineOptions=T,
+            markerOptions = FALSE,
+            circleOptions = F,
+            polygonOptions = F,
+            circleMarkerOptions = F,
+            rectangleOptions = F,
+            editOptions = editToolbarOptions()) #%>%
+          #hideGroup("draw")
       } else {
         if (input$marker_loc=="Sachsen"){
           temp_leaflet %>%
@@ -1472,7 +1513,7 @@ server <- function(input, output, session){
     gw_surface %>%
       sphere_shade(zscale = 1,texture = create_texture("#85BCDE", "#436A80", "#97B1D9", "#5E83BF", "#6D94C7")) %>%
       plot_3d(gw_surface, zscale = 1, fov = 0, theta = 0, phi = 45,
-              windowsize = c(1200, 1000), zoom = 0.7,
+              windowsize = c(1200, 1200), zoom = 0.7,
               water = TRUE, waterdepth = 0, wateralpha = 0.3, watercolor = c("#B0AEA9"),
               waterlinecolor = "white", waterlinealpha = 0.8,solid=F)
     rglwidget()
@@ -1514,6 +1555,27 @@ server <- function(input, output, session){
       scale_fill_viridis_d(guide=F)+
       theme_bw()+
       labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau oder See [m]")
+    
+  })
+  
+  output$profile <- renderPlot({
+    shiny::validate(
+      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
+    )
+    
+    print(sf_pts())
+    points <- raster::extract(kriged(),sf_pts())
+    print(points)
+    points %>%
+      data.frame(elev=.) %>%
+      rowid_to_column("id") %>%
+      add_column(min_value=min(points,na.rm = T)-1) %>%
+      mutate(elev=ifelse(is.na(elev),min(points,na.rm = T)-1,elev)) %>%
+      ggplot(aes(id,elev))+
+      geom_ribbon(aes(ymin=min_value,ymax=elev),fill=c("#6893D9"))+
+      geom_point()+
+      labs(x="",y=unit_values,title = "Profil des Grundwasserpegels")+
+      theme(axis.text.x = element_blank())
     
   })
   
