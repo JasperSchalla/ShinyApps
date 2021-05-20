@@ -760,9 +760,10 @@ server <- function(input, output, session){
           #addProviderTiles(provider=providers$OpenStreetMap)  %>%
           addTiles() %>%
           addRasterImage(kriged(),colors = pal_fun2,opacity = 0.7) %>%
-          addLegend("topright",pal=pal_fun2,values=raster::values(kriged()),
+          addLegend("bottomright",pal=pal_fun2,values=raster::values(kriged()),
                     title = paste0(input$descr_values," [",unit_values,"]")) %>%
           addDrawToolbar(
+            position = "topright",
             targetGroup='draw',
             polylineOptions=T,
             markerOptions = FALSE,
