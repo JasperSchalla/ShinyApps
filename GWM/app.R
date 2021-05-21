@@ -23,6 +23,7 @@ library(zoo)
 library(rayshader)
 library(rgl)
 library(rglwidget)
+library(ggpubr)
 
 ui <- dashboardPage(skin = "black",
   dashboardHeader(title = span(tagList(icon("tint"),"GWM"))),
@@ -36,7 +37,7 @@ ui <- dashboardPage(skin = "black",
   ),
   dashboardBody(id="container_all",
     tags$head(
-      tags$style(type="text/css","#option_panel {max-height: 520px;overflow-y:auto;overflow-x:hidden;}"),
+      tags$style(type="text/css","#option_panel {max-height:520px;overflow-y:auto;overflow-x:hidden;}"),
       tags$style(HTML(".js-irs-0 .irs-grid-text, .js-irs-0 .irs-min, .js-irs-0 .irs-max{color:white;}")),
       tags$style(HTML(".js-irs-1 .irs-grid-text, .js-irs-1 .irs-min, .js-irs-1 .irs-max{color:white;}")),
       tags$style(HTML(".js-irs-2 .irs-grid-text, .js-irs-2 .irs-min, .js-irs-2 .irs-max{color:white;}")),
@@ -182,8 +183,7 @@ ui <- dashboardPage(skin = "black",
                     plotOutput("cluster_info"))
                 ),
               fluidRow(
-                div(id="transparent_div",box(width=3)),
-                tags$style(type="text/css","#transparent_div {opacity: 0;}"),
+                box(width=3,background = "navy",selectInput("distance_type",label=strong("Distanz zu"),choices = c("Tagebau","Tagebau + Seen"),selected = "Tabebau")),
                 box(width=9,background="navy",
                     plotOutput("distances"))
               )
@@ -208,6 +208,8 @@ server <- function(input, output, session){
   orig_crs2 <- st_crs(st_read("./geo_data/crs_holder_sachsen_anhalt.shp"))
   distances_sachsen <- read.csv("./geo_data/distances_sachsen.csv")
   distances_sachsen_anhalt <- read.csv("./geo_data/distances_sachsen_anhalt.csv")
+  distances_sachsen_tagebau <- read.csv("./geo_data/distances_sachsen_tagebau.csv")
+  distances_sachsen_anhalt_tagebau <- read.csv("./geo_data/distances_sachsen_anhalt_tagebau.csv")
   unit_values <- "m ue. GOK"
   counter <- 1
   
@@ -1264,7 +1266,7 @@ server <- function(input, output, session){
       #breaks <- c(rev(c(0,1, round(abs(min(gw_change_temp$gw_change,na.rm = T)),0)-20))*-1,c(0, 1, round(max(gw_change_temp$gw_change,na.rm = T),0)-20))
     }
     
-    breaks <- c(-10,-1,-0.1,0,0.1,1,10)
+    breaks <- c(-10,-1,-0.1,-0.01,0,0.01,0.1,1,10)
     
     gw_change_temp %>%
       filter(year>=year(input$gw_change_years[1]) & year<=year(input$gw_change_years[2])) %>%
@@ -1484,7 +1486,7 @@ server <- function(input, output, session){
     kmean_obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],input$k,nstart=25)
 
     fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
-                 ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k)) +
+                 ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
       labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")
 
   })
@@ -1514,7 +1516,7 @@ server <- function(input, output, session){
     
     gw_surface <- raster_to_matrix(kriged())
     gw_surface %>%
-      sphere_shade(zscale = 1,texture = create_texture("#85BCDE", "#436A80", "#97B1D9", "#5E83BF", "#6D94C7")) %>%
+      sphere_shade(zscale = 1,texture = create_texture("#85BCDE","#16324d", "#97B1D9", "#5E83BF", "#6D94C7")) %>%
       plot_3d(gw_surface, zscale = 1, fov = 0, theta = 0, phi = 45,
               windowsize = c(1200, 1200), zoom = 0.7,
               water = TRUE, waterdepth = 0, wateralpha = 0.3, watercolor = c("#B0AEA9"),
@@ -1527,24 +1529,33 @@ server <- function(input, output, session){
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
     
+    if (input$distance_type=="Tagebau"){
+      distances_s <- distances_sachsen_tagebau
+      distances_sa <- distances_sachsen_anhalt_tagebau
+    } else {
+      distances_s <- distances_sachsen
+      distances_sa <- distances_sachsen_anhalt
+    }
+    
     df_comp <- scale(df_var()[complete.cases(df_var()),.(min_var,max_var)])
     kmean_obj <- kmeans(df_comp,input$k,nstart = 25)
     
     if (input$marker_loc_meta4=="Sachsen"){
       final_df <- tibble(mkz=df_var()[complete.cases(df_var()),.(mkz)]$mkz,cluster=kmean_obj$cluster) %>%
-        left_join(distances_sachsen,by="mkz")
+        left_join(distances_s,by="mkz")
     } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
       final_df <- tibble(mkz=df_var()[complete.cases(df_var()),.(mkz)]$mkz,cluster=kmean_obj$cluster) %>%
-        left_join(distances_sachsen_anhalt,by="mkz")
+        left_join(distances_sa,by="mkz")
     } else {
       final_df <- tibble(mkz=df_var()[complete.cases(df_var()),.(mkz)]$mkz,cluster=kmean_obj$cluster) %>%
-        left_join(rbind(distances_sachsen,distances_sachsen_anhalt),by="mkz")
+        left_join(rbind(distances_s,distances_sa),by="mkz")
     }
     
     final_df_medians <- final_df %>%
       mutate_at(vars(cluster),as.factor) %>%
       group_by(cluster) %>%
       summarize(median=round(median(min_dist),0),n=n())
+    
     
     final_df %>%
       mutate_at(vars(cluster),as.factor) %>%
@@ -1557,13 +1568,17 @@ server <- function(input, output, session){
                 size=3,vjust=-3)+
       scale_fill_viridis_d(guide=F)+
       theme_bw()+
-      labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau oder See [m]")
+      labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau oder See [m]")+
+      stat_compare_means(method = "anova")+
+      stat_compare_means(label="p.signif",method = "t.test",
+                         ref.group = as.character(final_df_medians[which.min(final_df_medians$n),]$cluster))
     
   })
   
   output$profile <- renderPlot({
+    
     shiny::validate(
-      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
+      need(input$df_sachsen!="" & input$df_sachsen_anhalt!="" & !is.null(sf_pts()),"Linie zeichnen um das Profil des Grundwasserstandes zu sehen")
     )
     
     points <- raster::extract(kriged(),sf_pts())
