@@ -82,8 +82,8 @@ ui <- dashboardPage(skin = "black",
                                                    div(id="profile_container",checkboxInput("show_profile",label=strong("Profil"))),
                                                    tags$style(type="text/css","#profile_container {color:#9dbccf;}")),
                                   checkboxInput("show_outliers",label = strong("Ausreisser ausblenden")),
-                                  conditionalPanel("input.show_outliers==true",div(id="outliers_container",numericInput("outliers_lower",label = strong("Untere Grenze [m u. GOK]"),min = -1000,max=1000,value=-100),
-                                                                                   numericInput("outliers_upper",label = strong("Obere Grenze [m u. GOK]"),min = -1000,max=1000,value=100)),
+                                  conditionalPanel("input.show_outliers==true",div(id="outliers_container",numericInput("outliers_lower",label = strong("Untere Grenze [m ue. GOK]"),min = -1000,max=1000,value=-100),
+                                                                                   numericInput("outliers_upper",label = strong("Obere Grenze [m ue. GOK]"),min = -1000,max=1000,value=100)),
                                                    tags$style(type="text/css","#outliers_container {color:#9dbccf;}")),
                                   checkboxInput("show_period",label=strong("Zeitreiheneigenschaften zeigen")),
                                   conditionalPanel("input.show_period==true",
@@ -197,7 +197,6 @@ server <- function(input, output, session){
   options(shiny.maxRequestSize=1e9)
   options(scipen=999)
   options(shiny.sanitize.errors = FALSE)
-  set.seed(400)
   
   col_sachsen <- viridis::viridis(3)[2]#"#EEAD0E" 
   col_sachsen_anhalt <- viridis::viridis(3)[3]#"#009ACD"
@@ -567,7 +566,7 @@ server <- function(input, output, session){
         dplyr::select(-hw,-mhw,-mw,-mnw,-nw,-messzeitpunkt,-einheit,-wert)
       
     } else if (!input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & input$show_cluster & !input$show_trend){
-      
+      set.seed(100)
       cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(scale(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)]),input$k_map,nstart=25)$cluster)]
       if (input$marker_loc=="Sachsen"){
         
@@ -994,6 +993,7 @@ server <- function(input, output, session){
         hideGroup("draw") %>%
         addLegend("bottomright",pal = pal_alt,values = ~hohensystem,opacity = 1,title = "Hoehensystem")
     } else if (input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_trend){
+      set.seed(100)
       cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(scale(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)]),input$k_map,nstart=25)$cluster)]
       if (input$marker_loc=="Sachsen"){
         
@@ -1089,7 +1089,7 @@ server <- function(input, output, session){
           polygonOptions = F,
           circleMarkerOptions = F) %>%
         hideGroup("draw") %>%
-        addLegend("bottomright",pal=pal_fun,values=~slope,opacity = 1,title = "San-Steigung")
+        addLegend("bottomright",pal=pal_fun,values=~slope,opacity = 1,title = "Sen-Slope")
     } else {
       if (input$marker_loc=="Sachsen"){
         temp_leaflet %>%
@@ -1312,7 +1312,7 @@ server <- function(input, output, session){
                                         end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
         df_sachsen_anhalt()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
       } else {
-        mkz_filtered <- df_sachsen_all()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+        mkz_filtered <- df_all()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
                                         end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
         df_all()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
       }
@@ -1482,7 +1482,7 @@ server <- function(input, output, session){
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
-    
+    set.seed(100)
     kmean_obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],input$k,nstart=25)
 
     fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
@@ -1492,7 +1492,7 @@ server <- function(input, output, session){
   })
   
   output$cluster_info <- renderPlot({
-    
+    set.seed(100)
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
@@ -1536,7 +1536,7 @@ server <- function(input, output, session){
       distances_s <- distances_sachsen
       distances_sa <- distances_sachsen_anhalt
     }
-    
+    set.seed(100)
     df_comp <- scale(df_var()[complete.cases(df_var()),.(min_var,max_var)])
     kmean_obj <- kmeans(df_comp,input$k,nstart = 25)
     
@@ -1557,7 +1557,7 @@ server <- function(input, output, session){
       summarize(median=round(median(min_dist),0),n=n())
     
     
-    final_df %>%
+    temp_plot <- final_df %>%
       mutate_at(vars(cluster),as.factor) %>%
       mutate(cluster=fct_reorder(cluster,min_dist)) %>%
       left_join(final_df_medians,by="cluster") %>%
@@ -1568,11 +1568,21 @@ server <- function(input, output, session){
                 size=3,vjust=-3)+
       scale_fill_viridis_d(guide=F)+
       theme_bw()+
-      labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau oder See [m]")+
       stat_compare_means(method = "anova")+
       stat_compare_means(label="p.signif",method = "t.test",
                          ref.group = as.character(final_df_medians[which.min(final_df_medians$n),]$cluster))
     
+
+    
+      
+    if (input$distance_type=="Tagebau"){
+      temp_plot+
+        labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau[m]")
+    } else {
+      temp_plot+
+        labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau oder See [m]")
+    }
+      
   })
   
   output$profile <- renderPlot({
