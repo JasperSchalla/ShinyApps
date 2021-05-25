@@ -730,7 +730,7 @@ server <- function(input, output, session){
   })
   
   trend_popup <- reactive({
-    paste("<strong>Sen-Steigung:</strong>",round(sf_sign()$slope,5),"<br>",
+    paste("<strong>Sen-Slope:</strong>",round(sf_sign()$slope,5),"<br>",
           "<strong>P-Wert Kendall-Test</strong>",round(sf_sign()$p_value,5))
   })
   
