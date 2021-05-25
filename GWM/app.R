@@ -11,13 +11,11 @@ library(tidyverse)
 library(htmltools)
 library(scales)
 library(data.table)
-library(spatstat) 
 library(maptools)
 library(leaflet.extras)
 library(rgdal)
 library(gstat)
 library(factoextra)
-library(trend)
 library(trend)
 library(zoo)
 library(rayshader)
@@ -102,17 +100,20 @@ ui <- dashboardPage(skin = "black",
                                                    div(id="cluster_filter_container",checkboxInput("cluster_filter",label=strong("Filtern"))),
                                                    tags$style(type="text/css","#cluster_filter_container {color:#9dbccf;}"),
                                                    helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert"),
-                                                   div(id="k_map_container",sliderInput("k_map",label=strong("K"),min = 2,max=10,value = 3)),
+                                                   div(id="k_map_container",sliderInput("k_map",label=strong("K"),min = 2,max=20,value = 3)),
                                                    tags$style(type="text/css","#k_map_container {color:#9dbccf;}")),
                                   checkboxInput("show_trend",label = strong("Trends")),
                                   conditionalPanel("input.show_trend==true",
                                                    div(id="trend_last_container",checkboxInput("trend_last",label = strong("Fuer die letzten 10 Jahre"))),
                                                    tags$style(type="text/css","#trend_last_container {color:#9dbccf;}"),
+                                                   div(id="trend_log_container",checkboxInput("trend_log",label = strong("Log"))),
+                                                   tags$style(type="text/css","#trend_log_container {color:#9dbccf;}"),
                                                    helpText("Zeitreihen muessen mindestens 10 Jahre lang sein")),
                                   br(),
                                   textOutput("no_selected"),
                                   br(),
                                   column(width=12,offset=1,downloadButton("download_selected","Shapefiles exportieren")),
+                                  br(),
                                   br(),
                                   br())),
               conditionalPanel("input.show_time_series==true",
@@ -175,7 +176,8 @@ ui <- dashboardPage(skin = "black",
                 box(width=3,background="navy",
                     selectInput("marker_loc_meta4",label=strong("Bundesland"),choices = c("Sachsen + Sachsen-Anhalt","Sachsen","Sachsen-Anhalt"),
                                 selected = "Sachsen + Sachsen-Anhalt"),
-                    sliderInput("k",label=strong("Cluster"),min=2,max=10,value=2),
+                    sliderInput("k",label=strong("Cluster"),min=2,max=20,value=2),
+                    checkboxInput("k_log",label = strong("Log")),
                     checkboxInput("cluster_filter2",label=strong("Filtern")),
                     helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert")),
                 box(width=9,background="navy",
@@ -730,7 +732,8 @@ server <- function(input, output, session){
   
   trend_popup <- reactive({
     paste("<strong>Sen-Slope:</strong>",round(sf_sign()$slope,5),"<br>",
-          "<strong>P-Wert Kendall-Test</strong>",round(sf_sign()$p_value,5))
+          "<strong>P-Wert Kendall-Test</strong>",round(sf_sign()$p_value,5),"<br>",
+          "<strong>Mittlere Sen-Slope:</strong>",round(mean(sf_sign()$slope,na.rm=T),2))
   })
   
   output$map <- renderLeaflet({
@@ -996,9 +999,10 @@ server <- function(input, output, session){
       set.seed(100)
       cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(scale(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)]),input$k_map,nstart=25)$cluster)]
       if (input$marker_loc=="Sachsen"){
-        
+      
         pts_cluster <- sf_sachsen() %>%
           left_join(cluster_df,by="mkz")
+        
         
         pts_cluster %>%
           leaflet() %>%
@@ -1070,7 +1074,18 @@ server <- function(input, output, session){
       }
       
     } else if (input$show_trend & !input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period) {
-      sf_sign() %>%
+      
+      print(sf_sign() %>% filter(slope==0))
+      
+      if (input$trend_log){
+        temp_sign <- sf_sign() %>%
+          mutate(slope=slope+0.0001) %>%
+          mutate(slope=log(slope))
+      } else {
+        temp_sign <- sf_sign()
+      }
+      
+      temp_sign %>%
         leaflet() %>%
         addTiles() %>%
         addCircleMarkers(
@@ -1462,7 +1477,6 @@ server <- function(input, output, session){
     
     sign_df <- tibble(mkz=ts_mat$mkz[-too_few],p_value=mk_ls,slope=unname(sens_slope_ls))
     
-    
     if (input$marker_loc=="Sachsen"){
       sf_sachsen() %>%
         left_join(sign_df,by="mkz")
@@ -1485,10 +1499,21 @@ server <- function(input, output, session){
     set.seed(100)
     kmean_obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],input$k,nstart=25)
 
-    fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
-                 ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
-      labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")
-
+    if (input$k_log){
+      #log_kmean <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)][,.(min_var=log(min_var),max_var=log(max_var))],input$k,nstart=25)
+      fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
+                   ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
+        labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")+
+        scale_y_log10()+
+        scale_x_log10()
+      
+    } else {
+      fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
+                   ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
+        labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")
+      
+    }
+    
   })
   
   output$cluster_info <- renderPlot({
@@ -1496,8 +1521,8 @@ server <- function(input, output, session){
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
-    clust_list <- vector("list",6)
-    for (i in 1:6){
+    clust_list <- vector("list",19)
+    for (i in 1:19){
       clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(scale(df_var()[complete.cases(df_var()),.(min_var,max_var)]),i+1,nstart=25)$withinss))
     }
     bind_rows(clust_list) %>%
