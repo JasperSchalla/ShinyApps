@@ -109,6 +109,7 @@ ui <- dashboardPage(skin = "black",
                                                    div(id="trend_log_container",checkboxInput("trend_log",label = strong("Log"))),
                                                    tags$style(type="text/css","#trend_log_container {color:#9dbccf;}"),
                                                    helpText("Zeitreihen muessen mindestens 10 Jahre lang sein")),
+                                  checkboxInput("show_di",label=strong("Korrelation mit Trockenheitsindex")),
                                   br(),
                                   textOutput("no_selected"),
                                   br(),
@@ -211,6 +212,7 @@ server <- function(input, output, session){
   distances_sachsen_anhalt <- read.csv("./geo_data/distances_sachsen_anhalt.csv")
   distances_sachsen_tagebau <- read.csv("./geo_data/distances_sachsen_tagebau.csv")
   distances_sachsen_anhalt_tagebau <- read.csv("./geo_data/distances_sachsen_anhalt_tagebau.csv")
+  di_corr <- read.csv("./geo_data/di_corr.csv")
   unit_values <- "m ue. GOK"
   counter <- 1
   
@@ -1105,6 +1107,53 @@ server <- function(input, output, session){
           circleMarkerOptions = F) %>%
         hideGroup("draw") %>%
         addLegend("bottomright",pal=pal_fun,values=~slope,opacity = 1,title = "Sen-Slope")
+    } else if (input$show_di){
+      
+      if (input$marker_loc=="Sachsen"){
+        sf_sachsen() %>%
+          left_join(di_corr,by="mkz") %>%
+          leaflet() %>%
+          addTiles() %>%
+          addCircleMarkers(
+            radius = 2,
+            stroke = T,
+            opacity = 1,
+            color = ~pal_fun(similar),
+            layerId = sf_sign()$mkz,
+            popup = trend_popup()
+          ) %>%
+          addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
+          
+      } else if (input$marker_loc=="Sachsen-Anhalt"){
+        sf_sachsen_anhalt() %>%
+          left_join(di_corr,by="mkz") %>%
+          leaflet() %>%
+          addTiles() %>%
+          addCircleMarkers(
+            radius = 2,
+            stroke = T,
+            opacity = 1,
+            color = ~pal_fun(similar),
+            layerId = sf_sign()$mkz,
+            popup = trend_popup()
+          ) %>%
+          addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
+      } else {
+        sf_all() %>%
+          left_join(di_corr,by="mkz") %>%
+          leaflet() %>%
+          addTiles() %>%
+          addCircleMarkers(
+            radius = 2,
+            stroke = T,
+            opacity = 1,
+            color = ~pal_fun(similar),
+            layerId = sf_sign()$mkz,
+            popup = trend_popup()
+          ) %>%
+          addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
+      }
+      
     } else {
       if (input$marker_loc=="Sachsen"){
         temp_leaflet %>%
