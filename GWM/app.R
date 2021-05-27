@@ -212,6 +212,10 @@ server <- function(input, output, session){
   distances_sachsen_anhalt <- read.csv("./geo_data/distances_sachsen_anhalt.csv")
   distances_sachsen_tagebau <- read.csv("./geo_data/distances_sachsen_tagebau.csv")
   distances_sachsen_anhalt_tagebau <- read.csv("./geo_data/distances_sachsen_anhalt_tagebau.csv")
+  sachsen_anhalt_tagebau <- st_read("./geo_data/sachsen_anhalt_tagebau.shp")
+  sachsen_tagebau <- st_read("./geo_data/sachsen_tagebau.shp")
+  sachsen_anhalt_tagebau_see <- st_read("./geo_data/sachsen_anhalt_tagebau_see.shp")
+  sachsen_tagebau_see <- st_read("./geo_data/sachsen_tagebau_see.shp")
   di_corr <- read.csv("./geo_data/di_corr.csv")
   unit_values <- "m ue. GOK"
   counter <- 1
