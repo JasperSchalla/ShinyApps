@@ -100,6 +100,13 @@ ui <- dashboardPage(skin = "black",
                                                    div(id="cluster_filter_container",checkboxInput("cluster_filter",label=strong("Filtern"))),
                                                    tags$style(type="text/css","#cluster_filter_container {color:#9dbccf;}"),
                                                    helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert"),
+                                                   div(id="k_log_calc_map_container",checkboxInput("k_log_calc_map",label = strong("Clustering mit log-Transformation"))),
+                                                   tags$style(type="text/css","#k_log_calc_map_container {color:#9dbccf;}"),
+                                                   div(id="show_distances_container",checkboxInput("show_distances",label=strong("Distanzobjekte zeigen"))),
+                                                   tags$style(type="text/css","#show_distances_container {color:#9dbccf;}"),
+                                                   div(id="cond_show_distances_container",conditionalPanel("input.show_distances==true",
+                                                                    selectInput("distance_type",label=strong("Distanz zu"),choices = c("Tagebau","Tagebau + Seen","Fluesse"),selected = "Tabebau"))),
+                                                   tags$style(type="text/css","#cond_show_distances_container {color:#9dbccf;}"),
                                                    div(id="k_map_container",sliderInput("k_map",label=strong("K"),min = 2,max=20,value = 3)),
                                                    tags$style(type="text/css","#k_map_container {color:#9dbccf;}")),
                                   checkboxInput("show_trend",label = strong("Trends")),
@@ -178,7 +185,8 @@ ui <- dashboardPage(skin = "black",
                     selectInput("marker_loc_meta4",label=strong("Bundesland"),choices = c("Sachsen + Sachsen-Anhalt","Sachsen","Sachsen-Anhalt"),
                                 selected = "Sachsen + Sachsen-Anhalt"),
                     sliderInput("k",label=strong("Cluster"),min=2,max=20,value=2),
-                    checkboxInput("k_log",label = strong("Log")),
+                    checkboxInput("k_log",label = strong("Log Achsen")),
+                    checkboxInput("k_log_calc",label = strong("Clustering mit log-Transformation")),
                     checkboxInput("cluster_filter2",label=strong("Filtern")),
                     helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert")),
                 box(width=9,background="navy",
@@ -186,7 +194,7 @@ ui <- dashboardPage(skin = "black",
                     plotOutput("cluster_info"))
                 ),
               fluidRow(
-                box(width=3,background = "navy",selectInput("distance_type",label=strong("Distanz zu"),choices = c("Tagebau","Tagebau + Seen"),selected = "Tabebau")),
+                box(width=3,background = "navy",selectInput("distance_type",label=strong("Distanz zu"),choices = c("Tagebau","Tagebau + Seen","Fluesse"),selected = "Tabebau")),
                 box(width=9,background="navy",
                     plotOutput("distances"))
               )
@@ -212,10 +220,14 @@ server <- function(input, output, session){
   distances_sachsen_anhalt <- read.csv("./geo_data/distances_sachsen_anhalt.csv")
   distances_sachsen_tagebau <- read.csv("./geo_data/distances_sachsen_tagebau.csv")
   distances_sachsen_anhalt_tagebau <- read.csv("./geo_data/distances_sachsen_anhalt_tagebau.csv")
+  distances_sachsen_fluss <- read.csv("./geo_data/distances_river_sachsen.csv")
+  distances_sachsen_anhalt_fluss <- read.csv("./geo_data/distances_river_sachsen_anhalt.csv")
   sachsen_anhalt_tagebau <- st_read("./geo_data/sachsen_anhalt_tagebau.shp")
   sachsen_tagebau <- st_read("./geo_data/sachsen_tagebau.shp")
   sachsen_anhalt_tagebau_see <- st_read("./geo_data/sachsen_anhalt_tagebau_see.shp")
   sachsen_tagebau_see <- st_read("./geo_data/sachsen_tagebau_see.shp")
+  sachsen_fluesse <- st_read("./geo_data/sachsen_fluesse.shp")
+  sachsen_anhalt_fluesse <- st_read("./geo_data/sachsen_anhalt_fluesse.shp")
   di_corr <- read.csv("./geo_data/di_corr.csv")
   unit_values <- "m ue. GOK"
   counter <- 1
@@ -1003,14 +1015,21 @@ server <- function(input, output, session){
         addLegend("bottomright",pal = pal_alt,values = ~hohensystem,opacity = 1,title = "Hoehensystem")
     } else if (input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_trend){
       set.seed(100)
-      cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(scale(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)]),input$k_map,nstart=25)$cluster)]
+      if (input$k_log_calc_map){
+        cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(scale(df_var_map()[complete.cases(df_var_map()),.(min_var=log(min_var*-1),max_var=log(max_var))]),input$k_map,nstart=25)$cluster)]
+        
+      } else {
+        cluster_df <- df_var_map()[complete.cases(df_var_map()),.(mkz,cluster=kmeans(scale(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)]),input$k_map,nstart=25)$cluster)]
+        
+      }
+      
       if (input$marker_loc=="Sachsen"){
       
         pts_cluster <- sf_sachsen() %>%
           left_join(cluster_df,by="mkz")
         
         
-        pts_cluster %>%
+        temp_leaf <- pts_cluster %>%
           leaflet() %>%
           addTiles() %>%
           addCircleMarkers(
@@ -1034,7 +1053,7 @@ server <- function(input, output, session){
         pts_cluster <- sf_sachsen_anhalt() %>%
           left_join(cluster_df,by="mkz")
         
-        pts_cluster %>%
+        temp_leaf <- pts_cluster %>%
           leaflet() %>%
           addTiles() %>%
           addCircleMarkers(
@@ -1058,7 +1077,7 @@ server <- function(input, output, session){
         pts_cluster <- sf_all() %>%
           left_join(cluster_df,by="mkz")
         
-        pts_cluster %>%
+        temp_leaf <- pts_cluster %>%
           leaflet() %>%
           addTiles() %>%
           addCircleMarkers(
@@ -1077,6 +1096,49 @@ server <- function(input, output, session){
             circleMarkerOptions = F) %>%
           hideGroup("draw") %>%
           addLegend("bottomright",pal=pal_alt,values = ~cluster,opacity = 1,title = "Cluster")
+      }
+      
+      if (input$show_distances){
+        if (input$marker_loc=="Sachsen"){
+          if (input$distance_type=="Tagebau"){
+            temp_leaf %>%
+              addPolygons(data=sachsen_tagebau,color = "brown")
+          } else if (input$distance_type=="Fluesse"){
+            temp_leaf %>%
+              addPolylines(data=sachsen_fluesse,color = "lightblue")
+          } else {
+            temp_leaf %>%
+              addPolygons(data=filter(sachsen_tagebau_see,fclass=="quarry"),color = "brown") %>%
+              addPolygons(data=filter(sachsen_tagebau_see,fclass=="water"),color="lightblue")
+          }
+        } else if (input$marker_loc=="Sachsen-Anhalt"){
+          if (input$distance_type=="Tagebau"){
+            temp_leaf %>%
+              addPolygons(data=sachsen_anhalt_tagebau,color = "brown")
+          } else if (input$distance_type=="Fluesse"){
+            temp_leaf %>%
+              addPolylines(data=sachsen_anhalt_fluesse,color = "lightblue")
+          } else {
+            temp_leaf %>%
+              addPolygons(data=filter(sachsen_anhalt_tagebau_see,fclass=="quarry"),color = "brown") %>%
+              addPolygons(data=filter(sachsen_anhalt_tagebau_see,fclass=="water"),color="lightblue")
+          }
+        } else {
+          if (input$distance_type=="Tagebau"){
+            temp_leaf %>%
+              addPolygons(data=rbind(sachsen_tagebau,sachsen_anhalt_tagebau),color = "brown")
+          } else if (input$distance_type=="Fluesse"){
+            temp_leaf %>%
+              addPolylines(data=rbind(sachsen_fluesse,sachsen_anhalt_fluesse),color = "lightblue")
+          } else {
+            temp_leaf %>%
+              addPolygons(data=filter(rbind(sachsen_tagebau_see,sachsen_anhalt_tagebau_see),fclass=="quarry"),color = "brown") %>%
+              addPolygons(data=filter(rbind(sachsen_tagebau_see,sachsen_anhalt_tagebau_see),fclass=="water"),color="lightblue")
+          }
+        }
+        
+      } else {
+        temp_leaf
       }
       
     } else if (input$show_trend & !input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period) {
@@ -1550,21 +1612,31 @@ server <- function(input, output, session){
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
     set.seed(100)
-    kmean_obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],input$k,nstart=25)
-
-    if (input$k_log){
-      #log_kmean <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)][,.(min_var=log(min_var),max_var=log(max_var))],input$k,nstart=25)
-      fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
-                   ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
-        labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")+
-        scale_y_log10()+
-        scale_x_log10()
+    
+    if (input$k_log_calc){
+      kmean_obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var=log(min_var*-1),max_var=log(max_var))][!is.na(min_var)],input$k,nstart=25)
       
+        fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=log(min_var*-1),max_var=log(max_var))],geom = "point",
+                     ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
+          labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")
+        
     } else {
-      fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
-                   ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
-        labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")
+      kmean_obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],input$k,nstart=25)
       
+      if (input$k_log){
+        #log_kmean <- kmeans(df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)][,.(min_var=log(min_var),max_var=log(max_var))],input$k,nstart=25)
+        fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
+                     ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
+          labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")+
+          scale_y_log10()+
+          scale_x_log10()
+        
+      } else {
+        fviz_cluster(kmean_obj,df_var()[complete.cases(df_var()),.(min_var=min_var*-1,max_var)],geom = "point",
+                     ellipse.type = "convex",ggtheme = theme_bw(),palette=viridis::viridis(input$k),stand = F) +
+          labs(x="Maximale negative Abweichung vom mittleren Grundwasserpegel [m]",y="Maximale positive Abweichung vom mittleren Grundwasserpegel [m]",title = "")
+        
+      }
     }
     
   })
@@ -1574,15 +1646,24 @@ server <- function(input, output, session){
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
-    clust_list <- vector("list",19)
-    for (i in 1:19){
-      clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(scale(df_var()[complete.cases(df_var()),.(min_var,max_var)]),i+1,nstart=25)$withinss))
+    
+    if (input$k_log_calc){
+      clust_list <- vector("list",19)
+      for (i in 1:19){
+        clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(scale(df_var()[complete.cases(df_var()),.(min_var=log(min_var*-1),max_var=log(max_var))][!is.na(min_var)]),i+1,nstart=25)$withinss))
+      }
+    } else {
+      clust_list <- vector("list",19)
+      for (i in 1:19){
+        clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(scale(df_var()[complete.cases(df_var()),.(min_var,max_var)]),i+1,nstart=25)$withinss))
+      }
     }
+    
     bind_rows(clust_list) %>%
       ggplot(aes(clust,ss,fill=as.factor(clust)))+
       geom_col()+
       scale_fill_viridis_d("Cluster",guide=F)+
-      labs(x="Cluster",y="Varianz innerhalb der Cluster")
+      labs(x="Cluster",y="Varianz innerhalb der Cluster") 
   })
   
   output$gw_surface <- renderRglwidget({
@@ -1610,12 +1691,21 @@ server <- function(input, output, session){
     if (input$distance_type=="Tagebau"){
       distances_s <- distances_sachsen_tagebau
       distances_sa <- distances_sachsen_anhalt_tagebau
+    } else if (input$distance_type=="Fluesse"){
+      distances_s <- distances_sachsen_fluss
+      distances_sa <- distances_sachsen_anhalt_fluss
     } else {
       distances_s <- distances_sachsen
       distances_sa <- distances_sachsen_anhalt
     }
     set.seed(100)
-    df_comp <- scale(df_var()[complete.cases(df_var()),.(min_var,max_var)])
+    
+    if (input$k_log_calc){
+      df_comp <- scale(df_var()[complete.cases(df_var()),.(min_var=log(min_var*-1),max_var=log(max_var))][!is.na(min_var)])
+    } else {
+      df_comp <- scale(df_var()[complete.cases(df_var()),.(min_var,max_var)])
+    }
+    
     kmean_obj <- kmeans(df_comp,input$k,nstart = 25)
     
     if (input$marker_loc_meta4=="Sachsen"){
@@ -1655,7 +1745,10 @@ server <- function(input, output, session){
       
     if (input$distance_type=="Tagebau"){
       temp_plot+
-        labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau[m]")
+        labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau [m]")
+    } else if (input$distance_type=="Fluesse"){
+      temp_plot+
+        labs(x="Cluster",y="Distanz zum naechstliegenden Fluss [m]")
     } else {
       temp_plot+
         labs(x="Cluster",y="Distanz zum naechstliegenden Tagebau oder See [m]")
