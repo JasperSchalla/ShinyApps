@@ -245,7 +245,7 @@ server <- function(input, output, session){
   orig_crs <- st_crs(st_read("./geo_data/crs_holder_sachsen.shp"))
   orig_crs2 <- st_crs(st_read("./geo_data/crs_holder_sachsen_anhalt.shp"))
   distances_sachsen <- read.csv("./geo_data/distances_sachsen.csv")
-  distances_sachsen_anhalt <- read.csv("./geo_data/distances_sachsen_anhalt.csv")
+  distances_sachsen_anhalt <- read.csv("./geo_data/distances_sachsen_anhalt_tagebau_see.csv")
   distances_sachsen_tagebau <- read.csv("./geo_data/distances_sachsen_tagebau.csv")
   distances_sachsen_anhalt_tagebau <- read.csv("./geo_data/distances_sachsen_anhalt_tagebau.csv")
   distances_sachsen_fluss <- read.csv("./geo_data/distances_river_sachsen.csv")
