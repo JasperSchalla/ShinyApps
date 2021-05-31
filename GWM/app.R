@@ -99,6 +99,8 @@ ui <- dashboardPage(skin = "black",
                                   checkboxInput("show_th",label=strong("Thiessens Polygone zeigen")),
                                   conditionalPanel("input.marker_loc=='Sachsen'",checkboxInput("show_alt",label=strong("Hoehensysteme anzeigen"))),
                                   checkboxInput("show_time_series",label=strong("Zeitreihen zeigen")),
+                                  div(id="show_di_ts_container",conditionalPanel("input.show_time_series==true & input.show_di==true",checkboxInput("show_di_ts",label=strong("Duerreindex anzeigen")))),
+                                  tags$style(type="text/css","#show_di_ts_container {color:#9dbccf;}"),
                                   conditionalPanel("input.show_time_series==true",div(id="df_years_container",dateRangeInput("df_years",label=strong("Jahre der Zeitreihen"),start = "1900-01-01",end="2021-01-01",
                                                                      format="dd.mm.yyyy",separator = " - ")),
                                                    tags$style(type="text/css","#df_years_container {color:#9dbccf;}")),
@@ -1571,7 +1573,7 @@ server <- function(input, output, session){
       
       if (input$trend_log){
         temp_sign <- sf_sign() %>%
-          mutate(slope=slope+0.0001) %>%
+          mutate(slope=ifelse(slope!=0,slope,NA)) %>%
           mutate(slope=log(slope))
       } else {
         temp_sign <- sf_sign()
@@ -1760,18 +1762,18 @@ server <- function(input, output, session){
       }
     }
     
-    if (input$show_di){
-      print(mkz_clicked())
-      print(corr_basis[mkz==mkz_clicked(),.(date=as.Date(paste0("01.",as.character(date)),format="%d.%m.%Y"),di,mnth_value)])
-      corr_basis[mkz==mkz_clicked(),.(date=as.Date(paste0("01.",as.character(date)),format="%d.%m.%Y"),di,mnth_value)] %>%
-        ggplot(aes(x=date))+
-        geom_line(aes(y=mnth_value),col="blue")+
-        geom_point(aes(y=mnth_value),col="blue")+
-        geom_line(aes(y=di/0.5),col="red")+
-        geom_point(aes(y=di/0.5),col="red")+
-        labs(x="",y= unit_values,title = title)+
-        scale_y_continuous(labels = comma,sec.axis = sec_axis(~.*0.5,name = "Duerreindex"))+
-        scale_x_date()
+    if (input$show_di_ts){
+      max_wert<- corr_basis[mkz==mkz_clicked(),.(max_wert=abs(max(mnth_value))-5)][,max_wert]
+      corr_basis[mkz==mkz_clicked()] %>%
+        ggplot(aes(x=date_alt))+
+        geom_line(aes(y=mnth_value,col="Grundwasserpegel"))+
+        #geom_point(aes(y=mnth_value),col="blue")+
+        geom_line(aes(y=di/0.5-max_wert,col="Duerreindex"))+
+        #geom_point(aes(y=di/0.5-max_wert),col="red")+
+        labs(x="",y= unit_values,title = glue::glue("Grundwasserstand und Duerreindex am Messpunkt {unique(df_sachsen_anhalt(),by='mkz')[mkz==mkz_clicked(),messstellenname]}"))+
+        scale_y_continuous(labels = comma,sec.axis = sec_axis(~(.+max_wert)*0.5,name = "Duerreindex"))+
+        scale_color_manual("",values=c("red","blue"))+
+        theme(legend.position = "bottom")
       #scale_y_reverse(labels=comma)
     } else {
       plot_templ %>%
