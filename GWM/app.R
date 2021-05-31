@@ -1171,6 +1171,10 @@ server <- function(input, output, session){
           "<strong>Min. Var:</strong>",cluster_text_map()$min_var,"m")
   })
   
+  corr_popup_sachsen <- reactive({
+    paste("<strong>Korr:</strong>", left_join(sf_sachsen(),di_corr,by="mkz")$similar)
+  })
+  
   # Render leaflet map
   
   output$map <- renderLeaflet({
@@ -1605,7 +1609,7 @@ server <- function(input, output, session){
             opacity = 1,
             color = ~pal_fun(similar),
             layerId = sf_sign()$mkz,
-            popup = trend_popup()
+            popup = corr_popup_sachsen()
           ) %>%
           addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
           
@@ -1620,7 +1624,7 @@ server <- function(input, output, session){
             opacity = 1,
             color = ~pal_fun(similar),
             layerId = sf_sign()$mkz,
-            popup = trend_popup()
+            popup = corr_popup_sachsen()
           ) %>%
           addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
       } else {
@@ -1634,7 +1638,7 @@ server <- function(input, output, session){
             opacity = 1,
             color = ~pal_fun(similar),
             layerId = sf_sign()$mkz,
-            popup = trend_popup()
+            popup = corr_popup_sachsen()
           ) %>%
           addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
       }
