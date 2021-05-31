@@ -57,7 +57,13 @@ ui <- dashboardPage(skin = "black",
                            br(),
                            fileInput("df_sachsen_anhalt",label = strong("Datensatz Sachsen-Anhalt"),accept = ".csv"))),
               fluidRow(box(width = 12,background = "navy",
-                           p("Upload Status"),textOutput("upload_status")))
+                           p("Upload Status"),textOutput("upload_status"))),
+              fluidRow(box(width = 12,background = "navy",
+                           p("Daten filtern"),column(width = 6,
+                                                     dateRangeInput("overall_date_range",label=strong("Zeitspanne"),start = "1900-01-01",end="2021-01-01",
+                                                                    format="dd.mm.yyyy",separator = " - ")),
+                           column(width=6,numericInput("overall_period",label = strong("Mindestlaenge der Zeitreihen [Jahre]"),min = 0,max = 500,value = 0)),
+                           column(width=12,offset=0.2,checkboxInput("use_filters",label = strong("Filter anwenden")))))
               ),
       tabItem(tabName = "wells_data",
               fluidRow(
@@ -119,10 +125,7 @@ ui <- dashboardPage(skin = "black",
                                                    tags$style(type="text/css","#cond_show_distances_container {color:#9dbccf;}"),
                                                    div(id="cluster_filter_container",checkboxInput("cluster_filter",label=strong("Filtern"))),
                                                    tags$style(type="text/css","#cluster_filter_container {color:#9dbccf;}"),
-                                                   div(id="filter_cluster_years_map_container",conditionalPanel("input.cluster_filter==true",numericInput("filter_cluster_years_map",
-                                                                                                            label = strong("Laenge der Zeitreihe [Jahre]"),min = 0,max=20,value = 2))),
-                                                   tags$style(type="text/css","#filter_cluster_years_map_container {color:#9dbccf;}")),
-                                                   #helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert")),
+                                                   helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert")),
                                   checkboxInput("show_trend",label = strong("Trends")),
                                   conditionalPanel("input.show_trend==true",
                                                    div(id="trend_last_container",checkboxInput("trend_last",label = strong("Fuer die letzten 10 Jahre"))),
@@ -203,10 +206,7 @@ ui <- dashboardPage(skin = "black",
                     checkboxInput("k_log_calc",label = strong("Clustering mit log-Transformation")),
                     numericInput("cluster_ref",label=strong("Referenzcluster"),min=1,max=20,value = 1),
                     checkboxInput("cluster_filter2",label=strong("Filtern")),
-                    div(id="filter_cluster_years_container",conditionalPanel("input.cluster_filter2==true",numericInput("filter_cluster_years",
-                                                                                                                           label = strong("Laenge der Zeitreihe [Jahre]"),min = 0,max=20,value = 2))),
-                    tags$style(type="text/css","#filter_cluster_years_container {color:#9dbccf;}")),
-                    #helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert")),
+                    helpText("Zeitreihen, die kuerzer als 10 Jahre sind und vor 1990 enden werden herausgefiltert")),
                 box(width=9,background="navy",
                     plotOutput("cluster_plot"),
                     plotOutput("cluster_info"))
@@ -244,7 +244,7 @@ server <- function(input, output, session){
     filter(NAME_1 %in% c("Sachsen","Sachsen-Anhalt"))
   orig_crs <- st_crs(st_read("./geo_data/crs_holder_sachsen.shp"))
   orig_crs2 <- st_crs(st_read("./geo_data/crs_holder_sachsen_anhalt.shp"))
-  distances_sachsen <- read.csv("./geo_data/distances_sachsen.csv")
+  distances_sachsen <- read.csv("./geo_data/distances_sachsen_tagebau_see.csv")
   distances_sachsen_anhalt <- read.csv("./geo_data/distances_sachsen_anhalt_tagebau_see.csv")
   distances_sachsen_tagebau <- read.csv("./geo_data/distances_sachsen_tagebau.csv")
   distances_sachsen_anhalt_tagebau <- read.csv("./geo_data/distances_sachsen_anhalt_tagebau.csv")
@@ -275,18 +275,46 @@ server <- function(input, output, session){
     
     if (!input$show_outliers){
       
-      fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"] %>%
-        mutate(messzeitpunkt=as.Date(messzeitpunkt)) 
+      if (input$use_filters){
+        read_data <- fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"] %>%
+          mutate(messzeitpunkt=as.Date(messzeitpunkt)) %>%
+          filter(messzeitpunkt>=as.Date(input$overall_date_range[1]) & messzeitpunkt<=as.Date(input$overall_date_range[2]))
+        selected_data <- read_data[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                      end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$overall_period][,mkz]
+        
+        read_data %>%
+          filter(mkz %in% selected_data)
+      } else {
+        fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"] %>%
+          mutate(messzeitpunkt=as.Date(messzeitpunkt))  
+      }
       
     } else {
       
-      fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"] %>%
-        mutate(messzeitpunkt=as.Date(messzeitpunkt)) %>%
-        .[hw<=input$outliers_upper & hw>=input$outliers_lower &
-             mhw<=input$outliers_upper & mhw>=input$outliers_lower &
-             mw<=input$outliers_upper & mw>=input$outliers_lower &
-             mnw<=input$outliers_upper & nw>=input$outliers_lower]
-      
+      if (input$use_filters){
+        read_data <- fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"] %>%
+          mutate(messzeitpunkt=as.Date(messzeitpunkt)) %>%
+          .[hw<=input$outliers_upper & hw>=input$outliers_lower &
+              mhw<=input$outliers_upper & mhw>=input$outliers_lower &
+              mw<=input$outliers_upper & mw>=input$outliers_lower &
+              mnw<=input$outliers_upper & nw>=input$outliers_lower] %>%
+          filter(messzeitpunkt>=as.Date(input$overall_date_range[1]) & messzeitpunkt<=as.Date(input$overall_date_range[2]))
+        selected_data <- read_data[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                      end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$overall_period][,mkz]
+        
+        read_data %>%
+          filter(mkz %in% selected_data)
+        
+      } else {
+        fread(input$df_sachsen$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen"] %>%
+          mutate(messzeitpunkt=as.Date(messzeitpunkt)) %>%
+          .[hw<=input$outliers_upper & hw>=input$outliers_lower &
+              mhw<=input$outliers_upper & mhw>=input$outliers_lower &
+              mw<=input$outliers_upper & mw>=input$outliers_lower &
+              mnw<=input$outliers_upper & nw>=input$outliers_lower]
+        
+      }
+  
     }
   
   })
@@ -296,20 +324,51 @@ server <- function(input, output, session){
   df_sachsen_anhalt <- reactive({
     
     if (!input$show_outliers){
-     
-      fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"] %>%
-        filter(!is.na(rechtswert)) %>%
-        mutate(messzeitpunkt=as.Date(messzeitpunkt))
+      
+      if (input$use_filters){
+        read_data <- fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"] %>%
+          filter(!is.na(rechtswert)) %>%
+          mutate(messzeitpunkt=as.Date(messzeitpunkt)) %>%
+          filter(messzeitpunkt>=as.Date(input$overall_date_range[1]) & messzeitpunkt<=as.Date(input$overall_date_range[2]))
+        selected_data <- read_data[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                    end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$overall_period][,mkz]
+        
+        read_data %>%
+          filter(mkz %in% selected_data)
+        
+      } else {
+        fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"] %>%
+          filter(!is.na(rechtswert)) %>%
+          mutate(messzeitpunkt=as.Date(messzeitpunkt)) 
+      }
        
     } else {
-     
-      fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"] %>%
-        filter(!is.na(rechtswert)) %>%
-        mutate(messzeitpunkt=as.Date(messzeitpunkt)) %>%
-        .[hw<=input$outliers_upper & hw>=input$outliers_lower &
-            mhw<=input$outliers_upper & mhw>=input$outliers_lower &
-            mw<=input$outliers_upper & mw>=input$outliers_lower &
-            mnw<=input$outliers_upper & nw>=input$outliers_lower]
+      
+      if (input$use_filters){
+        read_data <- fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"] %>%
+          filter(!is.na(rechtswert)) %>%
+          mutate(messzeitpunkt=as.Date(messzeitpunkt)) %>%
+          .[hw<=input$outliers_upper & hw>=input$outliers_lower &
+              mhw<=input$outliers_upper & mhw>=input$outliers_lower &
+              mw<=input$outliers_upper & mw>=input$outliers_lower &
+              mnw<=input$outliers_upper & nw>=input$outliers_lower]  %>%
+          filter(messzeitpunkt>=as.Date(input$overall_date_range[1]) & messzeitpunkt<=as.Date(input$overall_date_range[2]))
+        selected_data <- read_data[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
+                                      end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$overall_period][,mkz]
+        
+        read_data %>%
+          filter(mkz %in% selected_data)
+        
+        
+      } else {
+        fread(input$df_sachsen_anhalt$datapath)[,(name_vec):=round(.SD,2),.SDcols=name_vec][,loc:="Sachsen-Anhalt"] %>%
+          filter(!is.na(rechtswert)) %>%
+          mutate(messzeitpunkt=as.Date(messzeitpunkt)) %>%
+          .[hw<=input$outliers_upper & hw>=input$outliers_lower &
+              mhw<=input$outliers_upper & mhw>=input$outliers_lower &
+              mw<=input$outliers_upper & mw>=input$outliers_lower &
+              mnw<=input$outliers_upper & nw>=input$outliers_lower] 
+      }
        
     }
     
@@ -874,18 +933,15 @@ server <- function(input, output, session){
       
       if (input$marker_loc_meta4=="Sachsen"){
         mkz_filtered <- df_sachsen()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
-                                        #end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
-                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$filter_cluster_years][,mkz]
+                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
         df_sachsen()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
       } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
         mkz_filtered <- df_sachsen_anhalt()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
-                                               #end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
-                                               end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$filter_cluster_years][,mkz]
+                                               end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
         df_sachsen_anhalt()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
       } else {
         mkz_filtered <- df_all()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
-                                    #end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
-                                    end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$filter_cluster_years][,mkz]
+                                    end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
         df_all()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
       }
     } else {
@@ -905,18 +961,15 @@ server <- function(input, output, session){
     if (input$cluster_filter){
       if (input$marker_loc=="Sachsen"){
         mkz_filtered <- df_sachsen()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
-                                        #end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
-                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$filter_cluster_years_map][,mkz]
+                                        end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
         df_sachsen()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
       } else if (input$marker_loc=="Sachsen-Anhalt"){
         mkz_filtered <- df_sachsen_anhalt()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
-                                               #end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
-                                               end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$filter_cluster_years_map][,mkz]
+                                               end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
         df_sachsen_anhalt()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
       } else {
         mkz_filtered <- df_all()[,.(period=as.numeric(difftime(max(messzeitpunkt),min(messzeitpunkt),units = "weeks")/52.25),
-                                    #end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
-                                    end_date=max(messzeitpunkt)),by=.(mkz)][period>=input$filter_cluster_years_map][,mkz]
+                                    end_date=max(messzeitpunkt)),by=.(mkz)][period>=10 & end_date>=as.Date("1991-01-01")][,mkz]
         df_all()[mkz %in% mkz_filtered][,.(mw,wert,mkz)][,var:=wert-mw][,.(min_var=min(var),max_var=max(var)),by=.(mkz)][,range_var:=abs(min_var-max_var)] 
       } 
     } else {
