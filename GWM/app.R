@@ -254,7 +254,8 @@ server <- function(input, output, session){
   sachsen_tagebau_see <- st_read("./geo_data/sachsen_tagebau_see.shp")
   sachsen_fluesse <- st_read("./geo_data/sachsen_fluesse.shp")
   sachsen_anhalt_fluesse <- st_read("./geo_data/sachsen_anhalt_fluesse.shp")
-  di_corr <- read.csv("./geo_data/di_corr.csv")
+  corr_basis <- fread("./geo_data/corr_basis.csv")
+  di_corr <- corr_basis[,.(similar=cor(di,mnth_value)),by=.(mkz)] 
   
   # Update select input
   
@@ -1759,13 +1760,29 @@ server <- function(input, output, session){
       }
     }
     
-    plot_templ %>%
-      ggplot(aes(messzeitpunkt,wert))+
-      geom_line(col="darkblue")+
-      geom_point(col="darkblue")+
-      labs(x="",y= unit_values,title = title)+
-      scale_y_continuous(labels = comma)
+    if (input$show_di){
+      print(mkz_clicked())
+      print(corr_basis[mkz==mkz_clicked(),.(date=as.Date(paste0("01.",as.character(date)),format="%d.%m.%Y"),di,mnth_value)])
+      corr_basis[mkz==mkz_clicked(),.(date=as.Date(paste0("01.",as.character(date)),format="%d.%m.%Y"),di,mnth_value)] %>%
+        ggplot(aes(x=date))+
+        geom_line(aes(y=mnth_value),col="blue")+
+        geom_point(aes(y=mnth_value),col="blue")+
+        geom_line(aes(y=di/0.5),col="red")+
+        geom_point(aes(y=di/0.5),col="red")+
+        labs(x="",y= unit_values,title = title)+
+        scale_y_continuous(labels = comma,sec.axis = sec_axis(~.*0.5,name = "Duerreindex"))+
+        scale_x_date()
       #scale_y_reverse(labels=comma)
+    } else {
+      plot_templ %>%
+        ggplot(aes(messzeitpunkt,wert))+
+        geom_line(col="darkblue")+
+        geom_point(col="darkblue")+
+        labs(x="",y= unit_values,title = title)+
+        scale_y_continuous(labels = comma)
+      #scale_y_reverse(labels=comma)
+    }
+    
   })
   
   # render Plot for measurement interval
