@@ -2588,6 +2588,7 @@ server <- function(input, output, session){
         labs(x="Cluster",y="")
     } else {
       temp_plot %>%
+        filter(n>1) %>%
         mutate(cluster=paste0(cluster," \n(n=",n,")")) %>%
         ggplot(aes(cluster,fill=lu))+
         geom_bar(position = "fill")+
