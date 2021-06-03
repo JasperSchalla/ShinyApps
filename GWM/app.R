@@ -2542,9 +2542,7 @@ server <- function(input, output, session){
     test <- clust_names_meta() %>%
       group_by(cluster) %>%
       summarize(n=n())
-    
-    print(test)
-    
+
     if (input$marker_loc_meta4=="Sachsen"){
       temp_plot <- lu_pts %>%
         filter(loc=="Sachsen") %>%
@@ -2583,7 +2581,7 @@ server <- function(input, output, session){
       temp_plot %>%
         ggplot(aes(cluster))+
         geom_mosaic(aes(x=product(lu,cluster),fill=lu))+
-        scale_fill_manual("Landnutzung",values=colorRampPalette(brewer.pal(name="Dark2", n = 8))(22),na.value="grey")+
+        scale_fill_manual("Landnutzung",values=colorRampPalette(brewer.pal(name="Dark2", n = 8))(12),na.value="grey")+
         #scale_fill_brewer("Landnutzung",palette="Spectral",na.value="grey")+
         labs(x="Cluster",y="")
     } else {
@@ -2593,7 +2591,7 @@ server <- function(input, output, session){
         ggplot(aes(cluster,fill=lu))+
         geom_bar(position = "fill")+
         scale_y_continuous(labels=percent)+
-        scale_fill_manual("Landnutzung",values=colorRampPalette(brewer.pal(name="Dark2", n = 8))(22),na.value="grey")+
+        scale_fill_manual("Landnutzung",values=colorRampPalette(brewer.pal(name="Dark2", n = 8))(12),na.value="grey")+
         #scale_fill_brewer("Landnutzung",palette="Spectral",na.value="grey")+
         labs(x="Cluster",y="") 
     }
