@@ -26,6 +26,7 @@ library(rglwidget)
 library(ggpubr)
 library(spatialEco)
 library(ggmosaic)
+library(RColorBrewer)
 
 # Graphical UI
 
