@@ -25,6 +25,7 @@ library(rgl)
 library(rglwidget)
 library(ggpubr)
 library(spatialEco)
+library(ggmosaic)
 
 # Graphical UI
 
@@ -220,7 +221,9 @@ ui <- dashboardPage(skin = "black",
                     plotOutput("distances"))
               ),
               fluidRow(
-                box(width = 12,background = "navy",
+                box(width = 3,background="navy",
+                                                  selectInput("cluster_lu_type",label = strong("Darstellung"),choices = c("Balkendiagramm","Mosaic-Plot"),selected = "Mosaic-Plot")),
+                box(width = 9,background = "navy",
                     plotOutput("cluster_lu"))
               )
             )
@@ -263,8 +266,7 @@ server <- function(input, output, session){
   sachsen_tagebau_see <- st_read("./geo_data/sachsen_tagebau_see.shp")
   sachsen_fluesse <- st_read("./geo_data/sachsen_fluesse.shp")
   sachsen_anhalt_fluesse <- st_read("./geo_data/sachsen_anhalt_fluesse.shp")
-  sachsen_lu <- st_read("./geo_data/sachsen_lu.shp")
-  sachsen_anhalt_lu <- st_read("./geo_data/sachsen_anhalt_lu.shp")
+  lu_pts <- fread("./geo_data/lu_pts.csv")
   corr_basis <- fread("./geo_data/corr_basis.csv")
   di_corr <- corr_basis[,.(similar=cor(di,mnth_value)),by=.(mkz)] 
   
@@ -1120,6 +1122,26 @@ server <- function(input, output, session){
     obj
   })
   
+  # Other attributes of clustered measurement stations for the meta analysis
+  
+  clust_names_meta <- reactive({
+    if (input$cluster_type_meta=="Variation"){
+      if (input$k_log_calc){
+        obj <- df_var()[complete.cases(df_var()),.(min_var=log(min_var*-1),
+                                                   max_var=log(max_var),mkz,
+                                                   cluster=as.factor(clust_obj_meta()$cluster))][!is.na(min_var)]
+      } else {
+        obj <- df_var()[complete.cases(df_var()),.(min_var,max_var,mkz,
+                                                   cluster=as.factor(clust_obj_meta()$cluster))]
+      }
+    } else if (input$cluster_type_meta=="Trend"){
+      obj <- data.table(mkz=sign_meta()$mkz,cluster=as.factor(clust_obj_meta()$cluster))
+    } else {
+      obj <- data.table(mkz=di_corr$mkz,cluster=as.factor(clust_obj_meta()$cluster))
+    }
+    obj
+  })
+  
   # Clustering object for the leaflet plot
   
   clust_obj_map <- reactive({
@@ -1362,6 +1384,7 @@ server <- function(input, output, session){
   pal_th <-colorNumeric("viridis",NULL,na.color = NA)
   pal_alt <- colorFactor("viridis",NULL,na.color = NA)
   d_pal_fun <- colorFactor(c(col_sachsen,col_sachsen_anhalt),NULL,na.color = NA)
+  pal_quant <- colorQuantile("viridis",NULL,n=5)
   
   # Popups for leaflet plots
   
@@ -1902,11 +1925,11 @@ server <- function(input, output, session){
             radius = 2,
             stroke = T,
             opacity = 1,
-            color = ~pal_fun(similar),
+            color = ~pal_quant(similar),#~pal_fun(similar),
             layerId = sf_sign()$mkz,
             popup = corr_popup_sachsen()
           ) %>%
-          addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
+          addLegend("bottomright",pal=pal_quant,values=~similar,opacity = 1,title = "Korrelation")
           
       } else if (input$marker_loc=="Sachsen-Anhalt"){
         sf_sachsen_anhalt() %>%
@@ -2515,13 +2538,62 @@ server <- function(input, output, session){
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
+    test <- clust_names_meta() %>%
+      group_by(cluster) %>%
+      summarize(n=n())
     
-    if (input$cluster_type_meta=="Variation"){
-      
-    } else if (input$cluster_type_meta=="Trend"){
-      
+    print(test)
+    
+    if (input$marker_loc_meta4=="Sachsen"){
+      temp_plot <- lu_pts %>%
+        filter(loc=="Sachsen") %>%
+        left_join(clust_names_meta(),by="mkz") %>%
+        left_join(clust_names_meta() %>%
+                    group_by(cluster) %>%
+                    summarize(n=n()),by="cluster") %>%
+        mutate(lu=as.factor(lu)) %>%
+        #mutate(fclass=fct_lump(fclass,10)) %>%
+        mutate(cluster=fct_reorder(cluster,n,.desc = T)) %>%
+        filter(!is.na(cluster))
+    } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
+      temp_plot <- lu_pts %>%
+        filter(loc=="Sachsen-Anhalt") %>%
+        left_join(clust_names_meta(),by="mkz") %>%
+        left_join(clust_names_meta() %>%
+                    group_by(cluster) %>%
+                    summarize(n=n()),by="cluster") %>%
+        mutate(lu=as.factor(lu)) %>%
+        #mutate(fclass=fct_lump(fclass,10)) %>%
+        mutate(cluster=fct_reorder(cluster,n,.desc = T)) %>%
+        filter(!is.na(cluster))
     } else {
-      
+      temp_plot <- lu_pts %>%
+        left_join(clust_names_meta(),by="mkz") %>%
+        left_join(clust_names_meta() %>%
+                    group_by(cluster) %>%
+                    summarize(n=n()),by="cluster") %>%
+        mutate(lu=as.factor(lu)) %>%
+        #mutate(fclass=fct_lump(fclass,10)) %>%
+        mutate(cluster=fct_reorder(cluster,n,.desc = T)) %>%
+        filter(!is.na(cluster))
+    }
+    
+    if (input$cluster_lu_type=="Mosaic-Plot"){
+      temp_plot %>%
+        ggplot(aes(cluster))+
+        geom_mosaic(aes(x=product(lu,cluster),fill=lu))+
+        scale_fill_manual("Landnutzung",values=colorRampPalette(brewer.pal(name="Dark2", n = 8))(22),na.value="grey")+
+        #scale_fill_brewer("Landnutzung",palette="Spectral",na.value="grey")+
+        labs(x="Cluster",y="")
+    } else {
+      temp_plot %>%
+        mutate(cluster=paste0(cluster," \n(n=",n,")")) %>%
+        ggplot(aes(cluster,fill=lu))+
+        geom_bar(position = "fill")+
+        scale_y_continuous(labels=percent)+
+        scale_fill_manual("Landnutzung",values=colorRampPalette(brewer.pal(name="Dark2", n = 8))(22),na.value="grey")+
+        #scale_fill_brewer("Landnutzung",palette="Spectral",na.value="grey")+
+        labs(x="Cluster",y="") 
     }
   })
   
