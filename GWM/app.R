@@ -116,7 +116,7 @@ ui <- dashboardPage(skin = "black",
                                   conditionalPanel("input.show_cluster==true",
                                                    div(id="cluster_type_map_container",selectInput("cluster_type_map",label = strong("Cluster Variable"),choices = c("Variation","Trend","Korrelation"),selected = "Variation")),
                                                    tags$style(type="text/css","#cluster_type_map_container {color:#9dbccf;}"),
-                                                   div(id="corr_type_map_container",conditionalPanel("input.cluster_type_map=='Korrelation'",selectInput("corr_type_map",choices = c("Duerreindex","Bodenfeuchte","Evapotranspiration"),
+                                                   div(id="corr_type_map_container",conditionalPanel("input.cluster_type_map=='Korrelation'",selectInput("corr_type_map",label=strong("Parameter"),choices = c("Duerreindex","Bodenfeuchte","Evapotranspiration"),
                                                                                                                          selected = "Duerreindex"))),
                                                    tags$style(type="text/css","#corr_type_map_container {color:#9dbccf;}"),
                                                    div(id="k_map_container",sliderInput("k_map",label=strong("K"),min = 2,max=20,value = 2)),
@@ -209,7 +209,7 @@ ui <- dashboardPage(skin = "black",
                     selectInput("marker_loc_meta4",label=strong("Bundesland"),choices = c("Sachsen + Sachsen-Anhalt","Sachsen","Sachsen-Anhalt"),
                                 selected = "Sachsen + Sachsen-Anhalt"),
                     selectInput("cluster_type_meta",label=strong("Cluster Variable"),choices = c("Variation","Trend","Korrelation"),selected = "Variation"),
-                    conditionalPanel("input.cluster_type_meta=='Korrelation'",selectInput("corr_type_meta",choices = c("Duerreindex","Bodenfeuchte","Evapotranspiration"),
+                    conditionalPanel("input.cluster_type_meta=='Korrelation'",selectInput("corr_type_meta",label=strong("Parameter"),choices = c("Duerreindex","Bodenfeuchte","Evapotranspiration"),
                                                                                           selected = "Duerreindex")),
                     sliderInput("k",label=strong("Cluster"),min=2,max=20,value=2),
                     checkboxInput("k_log",label = strong("Log-transformierte Achsen")),
@@ -300,7 +300,9 @@ server <- function(input, output, session){
   })
   
   di_corr <- reactive({
-    corr_basis()[,.(similar=cor(value,mnth_value)),by=.(mkz)] 
+    print(corr_basis()[,.(similar=cor(value,mnth_value)),by=.(mkz)][!is.na(similar)])
+    print(corr_basis()[mkz=="46523566"])
+    corr_basis()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)]
   })
   
   # Update select input
@@ -779,7 +781,7 @@ server <- function(input, output, session){
                         rename(slope=V1) %>%
                         mutate_at(vars(cluster),as.factor),by="cluster")
       } else {
-        cluster_df <- data.table(mkz=di_corr()$mkz,cluster=as.factor(temp_kmean$cluster)) %>%
+        cluster_df <- data.table(mkz=filter(di_corr(),loc==input$marker_loc)$mkz,cluster=as.factor(temp_kmean$cluster)) %>%
             left_join(as.data.frame(temp_kmean$centers) %>%
                         rowid_to_column("cluster") %>%
                         rename(similar=V1) %>%
@@ -934,7 +936,7 @@ server <- function(input, output, session){
       cluster_df <- data.table(mkz=sign_meta()$mkz,cluster=clust_obj_map()$cluster) %>%
         mutate_at(vars(cluster),as.factor)
     } else {
-      cluster_df <- data.table(mkz=di_corr()$mkz,cluster=clust_obj_map()$cluster) %>%
+      cluster_df <- data.table(mkz=filter(di_corr(),loc==input$marker_loc)$mkz,cluster=clust_obj_map()$cluster) %>%
         mutate_at(vars(cluster),as.factor)
     }
     
@@ -1149,7 +1151,7 @@ server <- function(input, output, session){
     } else if (input$cluster_type_meta=="Trend"){
       obj <- kmeans(sign_meta()$slope,input$k,nstart=25)
     } else {
-      obj <- kmeans(di_corr()$similar,input$k,nstart=25)
+      obj <- kmeans(filter(di_corr(),loc==input$marker_loc_meta4)$similar,input$k,nstart=25)
     }
     
     obj
@@ -1170,7 +1172,7 @@ server <- function(input, output, session){
     } else if (input$cluster_type_meta=="Trend"){
       obj <- data.table(mkz=sign_meta()$mkz,cluster=as.factor(clust_obj_meta()$cluster))
     } else {
-      obj <- data.table(mkz=di_corr()$mkz,cluster=as.factor(clust_obj_meta()$cluster))
+      obj <- data.table(mkz=filter(di_corr(),loc==input$marker_loc_meta4)$mkz,cluster=as.factor(clust_obj_meta()$cluster))
     }
     obj
   })
@@ -1188,7 +1190,7 @@ server <- function(input, output, session){
     } else if (input$cluster_type_map=="Trend"){
       obj <- kmeans(sign_meta()$slope,input$k_map,nstart=25)
     } else {
-      obj <- kmeans(di_corr()$similar,input$k_map,nstart=25)
+      obj <- kmeans(filter(di_corr(),loc==input$marker_loc)$similar,input$k_map,nstart=25)
     }
     
     obj
@@ -1524,6 +1526,14 @@ server <- function(input, output, session){
   })
   
   corr_popup_sachsen <- reactive({
+    paste("<strong>Korr:</strong>", left_join(sf_sachsen(),filter(di_corr(),loc=="Sachsen"),by="mkz")$similar)
+  })
+  
+  corr_popup_sachsen_anhalt <- reactive({
+    paste("<strong>Korr:</strong>", left_join(sf_sachsen_anhalt(),filter(di_corr(),loc=="Sachsen-Anhalt"),by="mkz")$similar)
+  })
+  
+  corr_popup_all<- reactive({
     paste("<strong>Korr:</strong>", left_join(sf_sachsen(),di_corr(),by="mkz")$similar)
   })
   
@@ -1952,7 +1962,7 @@ server <- function(input, output, session){
       
       if (input$marker_loc=="Sachsen"){
         sf_sachsen() %>%
-          left_join(di_corr(),by="mkz") %>%
+          left_join(filter(di_corr(),loc=="Sachsen"),by="mkz") %>%
           leaflet() %>%
           addTiles() %>%
           addCircleMarkers(
@@ -1967,7 +1977,7 @@ server <- function(input, output, session){
           
       } else if (input$marker_loc=="Sachsen-Anhalt"){
         sf_sachsen_anhalt() %>%
-          left_join(di_corr(),by="mkz") %>%
+          left_join(filter(di_corr(),loc=="Sachsen-Anhalt"),by="mkz") %>%
           leaflet() %>%
           addTiles() %>%
           addCircleMarkers(
@@ -1976,7 +1986,7 @@ server <- function(input, output, session){
             opacity = 1,
             color = ~pal_fun(similar),
             layerId = sf_sign()$mkz,
-            popup = corr_popup_sachsen()
+            popup = corr_popup_sachsen_anhalt()
           ) %>%
           addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
       } else {
@@ -1990,7 +2000,7 @@ server <- function(input, output, session){
             opacity = 1,
             color = ~pal_fun(similar),
             layerId = sf_sign()$mkz,
-            popup = corr_popup_sachsen()
+            popup = corr_popup_all()
           ) %>%
           addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
       }
@@ -2306,7 +2316,7 @@ server <- function(input, output, session){
                 axis.ticks.y = element_blank())
       }
     } else {
-      tb <- tibble(mkz=di_corr()$mkz,similar=di_corr()$similar,cluster=as.factor(kmean_obj$cluster)) %>%
+      tb <- tibble(mkz=filter(di_corr(),loc==input$marker_loc_meta4)$mkz,similar=filter(di_corr(),loc==input$marker_loc_meta4)$similar,cluster=as.factor(kmean_obj$cluster)) %>%
         left_join(tibble(center=kmean_obj$centers[,1]) %>%
                     rowid_to_column("cluster") %>%
                     mutate_at(vars(cluster),as.factor),by="cluster")
@@ -2380,7 +2390,7 @@ server <- function(input, output, session){
     } else {
       clust_list <- vector("list",19)
       for (i in 1:19){
-        clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(di_corr()$similar,i+1,nstart=25)$withinss))
+        clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(filter(di_corr(),loc==input$marker_loc_meta4)$similar,i+1,nstart=25)$withinss))
       }
     }
     
@@ -2456,10 +2466,10 @@ server <- function(input, output, session){
       }
     } else {
       if (input$marker_loc_meta4=="Sachsen"){
-        final_df <- tibble(mkz=di_corr()$mkz,cluster=kmean_obj$cluster) %>%
+        final_df <- tibble(mkz=filter(di_corr(),loc=="Sachsen")$mkz,cluster=kmean_obj$cluster) %>%
           left_join(distances_s,by="mkz")
       } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
-        final_df <- tibble(mkz=di_corr()$mkz,cluster=kmean_obj$cluster) %>%
+        final_df <- tibble(mkz=filter(di_corr(),loc=="Sachsen-Anhalt")$mkz,cluster=kmean_obj$cluster) %>%
           left_join(distances_sa,by="mkz")
       } else {
         final_df <- tibble(mkz=di_corr()$mkz,cluster=kmean_obj$cluster) %>%
