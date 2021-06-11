@@ -289,16 +289,11 @@ server <- function(input, output, session){
     }
   }
   
-  corr_basis <- reactive({
+  corr_basis_meta <- reactive({
     if (input$use_filter_range | input$use_filter_period){
       
-      if (input$show_di){
-        corr_basis <- fread("gzip -dc './geo_data/all_corr_data.csv.gz'") %>%
-          filter(variable==corr2obj(input$corr_type_plot))
-      } else {
-        corr_basis <- fread("gzip -dc './geo_data/all_corr_data.csv.gz'") %>%
+      corr_basis <- fread("gzip -dc './geo_data/all_corr_data.csv.gz'") %>%
           filter(variable==corr2obj(input$corr_type_meta))  
-      }
       
       corr_basis <- corr_basis %>%
         filter(mkz %in% df_all()$mkz)
@@ -310,11 +305,59 @@ server <- function(input, output, session){
     corr_basis
   })
   
+  corr_basis_map <- reactive({
+    if (input$use_filter_range | input$use_filter_period){
+      
+      corr_basis <- fread("gzip -dc './geo_data/all_corr_data.csv.gz'") %>%
+        filter(variable==corr2obj(input$corr_type_map))  
+      
+      corr_basis <- corr_basis %>%
+        filter(mkz %in% df_all()$mkz)
+      
+    } else {
+      corr_basis <- fread("gzip -dc './geo_data/all_corr_data.csv.gz'") %>%
+        filter(variable==corr2obj(input$corr_type_map))
+    }
+    corr_basis
+  })
+  
+  corr_basis_plot <- reactive({
+    if (input$use_filter_range | input$use_filter_period){
+      
+      corr_basis <- fread("gzip -dc './geo_data/all_corr_data.csv.gz'") %>%
+        filter(variable==corr2obj(input$corr_type_plot))  
+      
+      corr_basis <- corr_basis %>%
+        filter(mkz %in% df_all()$mkz)
+      
+    } else {
+      corr_basis <- fread("gzip -dc './geo_data/all_corr_data.csv.gz'") %>%
+        filter(variable==corr2obj(input$corr_type_plot))
+    }
+    corr_basis
+  })
+  
   di_corr_meta <- reactive({
     if (input$marker_loc_meta4=="Sachsen + Sachsen-Anhalt"){
-      corr_basis()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)]
+      corr_basis_meta()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)]
     } else {
-      corr_basis()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)][loc==input$marker_loc_meta4]
+      corr_basis_meta()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)][loc==input$marker_loc_meta4]
+    }
+  })
+  
+  di_corr_map <- reactive({
+    if (input$marker_loc=="Sachsen + Sachsen-Anhalt"){
+      corr_basis_map()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)]
+    } else {
+      corr_basis_map()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)][loc==input$marker_loc]
+    }
+  })
+  
+  di_corr_plot <- reactive({
+    if (input$marker_loc=="Sachsen + Sachsen-Anhalt"){
+      corr_basis_plot()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)]
+    } else {
+      corr_basis_plot()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)][loc==input$marker_loc]
     }
   })
   
@@ -322,14 +365,8 @@ server <- function(input, output, session){
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
-  })
-  
-  di_corr_map <- reactive({
-    if (input$marker_loc=="Sachsen + Sachsen-Anhalt"){
-      corr_basis()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)]
-    } else {
-      corr_basis()[,.(similar=cor(value,mnth_value)),by=.(mkz,loc)][!is.na(similar)][loc==input$marker_loc]
-    }
+    
+    print(head(corr_basis_map()))
   })
   
   # Update select input
@@ -1164,9 +1201,9 @@ server <- function(input, output, session){
           pts_cluster <- sf_all() %>%
             left_join(cluster_df(),by="mkz") %>%
             mutate_at(vars(cluster),as.factor) %>%
-            left_join(kmean_obj_alt$centers %>%
+            left_join(kmean_obj$centers %>%
                         as.data.frame() %>%
-                        add_column(cluster=as.factor(seq(1,nrow(kmean_obj_alt$centers)))) %>%
+                        add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
                         mutate(min_var=min_var*-1) %>%
                         mutate_at(vars(min_var,max_var),function(x) round(x,2)),by="cluster")
         }
@@ -1262,7 +1299,7 @@ server <- function(input, output, session){
         obj <- kmeans(df_var()[complete.cases(df_var()),.(min_var,max_var)],input$k,nstart=25)
       }
     } else if (input$cluster_type_meta=="Trend"){
-      obj <- kmeans(sign_meta()$slope,input$k,nstart=25)
+      obj <- kmeans(abs(sign_meta()$slope),input$k,nstart=25)
     } else {
       obj <- kmeans(di_corr_meta()$similar,input$k,nstart=25) 
     }
@@ -1301,7 +1338,7 @@ server <- function(input, output, session){
         obj <- kmeans(df_var_map()[complete.cases(df_var_map()),.(min_var,max_var)],input$k_map,nstart=25)
       }
     } else if (input$cluster_type_map=="Trend"){
-      obj <- kmeans(sign_meta()$slope,input$k_map,nstart=25)
+      obj <- kmeans(abs(sign_meta()$slope),input$k_map,nstart=25)
     } else {
       obj <- kmeans(di_corr_map()$similar,input$k_map,nstart=25)
     }
@@ -1522,7 +1559,7 @@ server <- function(input, output, session){
     sens_slope_ls <- sapply(filtered_series,function(x) sens.slope(x)$estimates)
     
     tibble(mkz=ts_mat$mkz[-too_few],p_value=mk_ls,slope=unname(sens_slope_ls)) %>%
-      filter(mkz!="52426003")
+     filter(mkz!="52426003")
     
   })
   
@@ -2075,22 +2112,22 @@ server <- function(input, output, session){
       
       if (input$marker_loc=="Sachsen"){
         sf_sachsen() %>%
-          left_join(di_corr_map(),by="mkz") %>%
+          left_join(di_corr_plot(),by="mkz") %>%
           leaflet() %>%
           addTiles() %>%
           addCircleMarkers(
             radius = 2,
             stroke = T,
             opacity = 1,
-            color = ~pal_quant(similar),#~pal_fun(similar),
+            color = ~pal_fun(similar), #pal_quant(similar),
             layerId = sf_sign()$mkz,
             popup = corr_popup_sachsen()
           ) %>%
-          addLegend("bottomright",pal=pal_quant,values=~similar,opacity = 1,title = "Korrelation")
+          addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
           
       } else if (input$marker_loc=="Sachsen-Anhalt"){
         sf_sachsen_anhalt() %>%
-          left_join(di_corr_map(),by="mkz") %>%
+          left_join(di_corr_plot(),by="mkz") %>%
           leaflet() %>%
           addTiles() %>%
           addCircleMarkers(
@@ -2104,7 +2141,7 @@ server <- function(input, output, session){
           addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
       } else {
         sf_all() %>%
-          left_join(di_corr_map(),by="mkz") %>%
+          left_join(di_corr_plot(),by="mkz") %>%
           leaflet() %>%
           addTiles() %>%
           addCircleMarkers(
@@ -2235,17 +2272,17 @@ server <- function(input, output, session){
     }
     
     if (input$show_di_ts){
-      max_wert<- corr_basis()[mkz==mkz_clicked(),.(max_wert=abs(max(mnth_value))-5)][,max_wert]
-      corr_basis()[mkz==mkz_clicked()] %>%
+      max_wert<- corr_basis_map()[mkz==mkz_clicked(),.(max_wert=abs(max(mnth_value))-5)][,max_wert]
+      corr_basis_map()[mkz==mkz_clicked()] %>%
         ggplot(aes(x=date_alt))+
         geom_line(aes(y=mnth_value,col="Grundwasserpegel"))+
         #geom_point(aes(y=mnth_value),col="blue")+
-        geom_line(aes(y=di/0.5-max_wert,col="Duerreindex"))+
+        geom_line(aes(y=value/0.5-max_wert,col=input$corr_type_plot))+
         #geom_point(aes(y=di/0.5-max_wert),col="red")+
-        labs(x="",y= unit_values,title = glue::glue("Grundwasserstand und Duerreindex am Messpunkt {unique(df_sachsen_anhalt(),by='mkz')[mkz==mkz_clicked(),messstellenname]}"))+
-        scale_y_continuous(labels = comma,sec.axis = sec_axis(~(.+max_wert)*0.5,name = "Duerreindex"))+
+        scale_y_continuous(labels = comma,sec.axis = sec_axis(~(.+max_wert)*0.5,name = input$corr_type_plot))+
         scale_color_manual("",values=c("red","blue"))+
-        theme(legend.position = "bottom")
+        theme(legend.position = "bottom")+
+        labs(x="",y= unit_values,title = glue::glue("Grundwasserstand und {input$corr_type_plot} am Messpunkt {unique(df_sachsen_anhalt(),by='mkz')[mkz==mkz_clicked(),messstellenname]}"))
       #scale_y_reverse(labels=comma)
     } else {
       plot_templ %>%
