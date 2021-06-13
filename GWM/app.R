@@ -142,6 +142,7 @@ ui <- dashboardPage(skin = "black",
                                                    tags$style(type="text/css","#trend_log_container {color:#9dbccf;}"),
                                                    helpText("Zeitreihen muessen mindestens 10 Jahre lang sein")),
                                   checkboxInput("show_di",label=strong("Korrelation")),
+                                  checkboxInput("show_classes",label = strong("Klassifikation")),
                                   div(id="corr_type_plot_container",conditionalPanel("input.show_di==true",selectInput("corr_type_plot",label=strong("Parameter"),choices = c("Duerreindex","Bodenfeuchte","Evapotranspiration"),
                                                                                          selected = "Duerreindex"))),
                                   tags$style(type="text/css","#corr_type_plot_container {color:#9dbccf;}"),
@@ -277,7 +278,7 @@ server <- function(input, output, session){
   sachsen_fluesse <- st_read("./geo_data/sachsen_fluesse.shp")
   sachsen_anhalt_fluesse <- st_read("./geo_data/sachsen_anhalt_fluesse.shp")
   lu_pts <- fread("./geo_data/lu_pts.csv")
-  
+  cluster_class <- fread("./geo_data/cluster_classification.csv")
   
   corr2obj <- function(x) {
     if (x=="Duerreindex"){
@@ -366,7 +367,7 @@ server <- function(input, output, session){
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
     
-    print(head(corr_basis_map()))
+    print(head(classes()))
   })
   
   # Update select input
@@ -1563,6 +1564,19 @@ server <- function(input, output, session){
     
   })
   
+  classes <- reactive({
+    if (input$marker_loc=="Sachsen"){
+      sf_sachsen() %>%
+        left_join(cluster_class,by="mkz")
+    } else if (input$marker_loc=="Sachsen-Anhalt"){
+      sf_sachsen_anhalt() %>%
+        left_join(cluster_class,by="mkz")
+    } else {
+      sf_all() %>%
+        left_join(cluster_class,by="mkz")
+    }
+  })
+  
   # Color palettes for leaflet plots
   
   pal_fun <-colorNumeric("viridis",NULL,na.color = NA)
@@ -1713,7 +1727,7 @@ server <- function(input, output, session){
         addTiles()  
     }
     
-    if (input$show_descr_values & !input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend & !input$show_di){
+    if (input$show_descr_values & !input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend & !input$show_di & !input$show_classes){
       if (input$interpolation){
           temp_leaflet <- leaflet() %>%
           #addProviderTiles(provider=providers$OpenStreetMap)  %>%
@@ -1802,7 +1816,7 @@ server <- function(input, output, session){
                       title = paste0(input$descr_values," [",unit_values,"]")) 
         } 
       }
-    } else if (!input$show_descr_values & input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend & !input$show_di) {
+    } else if (!input$show_descr_values & input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend & !input$show_di & !input$show_classes) {
       if (input$marker_loc=="Sachsen"){
         time_properties_sachsen() %>%
           leaflet() %>%
@@ -1871,7 +1885,7 @@ server <- function(input, output, session){
                     title = period2title(input$period)) 
       }
       
-    } else if (input$show_th & !input$show_descr_values & !input$show_period & !input$show_alt & !input$show_cluster & !input$show_trend & !input$show_di){
+    } else if (input$show_th & !input$show_descr_values & !input$show_period & !input$show_alt & !input$show_cluster & !input$show_trend & !input$show_di & !input$show_classes){
       
       if (input$marker_loc=="Sachsen"){
         leaflet() %>%
@@ -1939,7 +1953,7 @@ server <- function(input, output, session){
           addLegend("bottomright",pal = pal_th,values = th_poly_all()$area,opacity = 1,title = "Flaeche [km<sup>2</sup>]")
       }
       
-    } else if (input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_cluster & !input$show_trend & !input$show_di){
+    } else if (input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_cluster & !input$show_trend & !input$show_di & !input$show_classes){
       temp_leaflet %>%
         addCircleMarkers(
           radius = 2,
@@ -1957,7 +1971,7 @@ server <- function(input, output, session){
           circleMarkerOptions = F) %>%
         hideGroup("draw") %>%
         addLegend("bottomright",pal = pal_alt,values = ~hohensystem,opacity = 1,title = "Hoehensystem")
-    } else if (input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_trend & !input$show_di){
+    } else if (input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_trend & !input$show_di & !input$show_classes){
       
       if (input$marker_loc=="Sachsen"){
       
@@ -2076,7 +2090,7 @@ server <- function(input, output, session){
         temp_leaf
       }
       
-    } else if (input$show_trend & !input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_di) {
+    } else if (input$show_trend & !input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_di & !input$show_classes) {
     
       
       if (input$trend_log){
@@ -2108,7 +2122,7 @@ server <- function(input, output, session){
           circleMarkerOptions = F) %>%
         hideGroup("draw") %>%
         addLegend("bottomright",pal=pal_fun,values=~slope,opacity = 1,title = "Sen-Slope [m/Jahr]")
-    } else if (input$show_di & !input$show_trend & !input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period){
+    } else if (input$show_di & !input$show_trend & !input$show_cluster & !input$show_alt & !input$show_th & !input$show_descr_values & !input$show_period & !input$show_classes){
       
       if (input$marker_loc=="Sachsen"){
         sf_sachsen() %>%
@@ -2154,7 +2168,20 @@ server <- function(input, output, session){
           ) %>%
           addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
       }
-      
+    } else if (input$show_classes & !input$show_descr_values & !input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend & !input$show_di){
+        print(T)
+        classes() %>%
+          leaflet() %>%
+          addTiles() %>%
+          addCircleMarkers(
+            radius = 2,
+            stroke = T,
+            opacity = 1,
+            color = ~pal_alt(class),
+            layerId = classes()$mkz,
+            popup = default_popup_all()
+          ) %>%
+          addLegend("bottomright",pal=pal_alt,values=~class,opacity = 1,title = "Klassen")
     } else {
       if (input$marker_loc=="Sachsen"){
         temp_leaflet %>%
