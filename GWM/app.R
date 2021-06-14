@@ -115,7 +115,7 @@ ui <- dashboardPage(skin = "black",
                                                    tags$style(type="text/css","#df_years_container {color:#9dbccf;}")),
                                   checkboxInput("show_cluster",label=strong("Cluster")),
                                   conditionalPanel("input.show_cluster==true",
-                                                   div(id="cluster_type_map_container",selectInput("cluster_type_map",label = strong("Cluster Variable"),choices = c("Variation","Trend","Korrelation"),selected = "Variation")),
+                                                   div(id="cluster_type_map_container",selectInput("cluster_type_map",label = strong("Cluster Variable"),choices = c("Variation","Trend","Korrelation","Pasta"),selected = "Variation")),
                                                    tags$style(type="text/css","#cluster_type_map_container {color:#9dbccf;}"),
                                                    div(id="corr_type_map_container",conditionalPanel("input.cluster_type_map=='Korrelation'",selectInput("corr_type_map",label=strong("Parameter"),choices = c("Duerreindex","Bodenfeuchte","Evapotranspiration"),
                                                                                                                          selected = "Duerreindex"))),
@@ -213,7 +213,7 @@ ui <- dashboardPage(skin = "black",
                 box(width=3,background="navy",
                     selectInput("marker_loc_meta4",label=strong("Bundesland"),choices = c("Sachsen + Sachsen-Anhalt","Sachsen","Sachsen-Anhalt"),
                                 selected = "Sachsen + Sachsen-Anhalt"),
-                    selectInput("cluster_type_meta",label=strong("Cluster Variable"),choices = c("Variation","Trend","Korrelation"),selected = "Variation"),
+                    selectInput("cluster_type_meta",label=strong("Cluster Variable"),choices = c("Variation","Trend","Korrelation","Pasta"),selected = "Variation"),
                     conditionalPanel("input.cluster_type_meta=='Korrelation'",selectInput("corr_type_meta",label=strong("Parameter"),choices = c("Duerreindex","Bodenfeuchte","Evapotranspiration"),
                                                                                           selected = "Duerreindex")),
                     sliderInput("k",label=strong("Cluster"),min=2,max=20,value=2),
@@ -279,6 +279,27 @@ server <- function(input, output, session){
   sachsen_anhalt_fluesse <- st_read("./geo_data/sachsen_anhalt_fluesse.shp")
   lu_pts <- fread("./geo_data/lu_pts.csv")
   cluster_class <- fread("./geo_data/cluster_classification.csv")
+  
+  
+  rmse_df_map <- reactive({
+    if (input$marker_loc=="Sachsen"){
+      fread("./geo_data/rmse_sachsen.csv")[!is.na(rmse)][mkz %in% df_all()$mkz]
+    } else if (input$marker_loc=="Sachsen-Anhalt"){
+      fread("./geo_data/rmse_sachsen_anhalt.csv")[!is.na(rmse)][mkz %in% df_all()$mkz]
+    } else {
+      rbind(rmse_sachsen(),rmse_sachsen_anhalt())[!is.na(rmse)][mkz %in% df_all()$mkz]
+    }
+  })
+  
+  rmse_df_meta <- reactive({
+    if (input$marker_loc_meta4=="Sachsen"){
+      fread("./geo_data/rmse_sachsen.csv")[!is.na(rmse)][mkz %in% df_all()$mkz]
+    } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
+      fread("./geo_data/rmse_sachsen_anhalt.csv")[!is.na(rmse)][mkz %in% df_all()$mkz]
+    } else {
+      rbind(rmse_sachsen(),rmse_sachsen_anhalt())[!is.na(rmse)][mkz %in% df_all()$mkz]
+    }
+  })
   
   corr2obj <- function(x) {
     if (x=="Duerreindex"){
@@ -366,8 +387,6 @@ server <- function(input, output, session){
     shiny::validate(
       need(input$df_sachsen!="" & input$df_sachsen_anhalt!="","Die Datensaetze muessen erst geuploadet werden")
     )
-    
-    print(head(classes()))
   })
   
   # Update select input
@@ -931,6 +950,12 @@ server <- function(input, output, session){
                         rowid_to_column("cluster") %>%
                         rename(slope=V1) %>%
                         mutate_at(vars(cluster),as.factor),by="cluster")
+      } else if (input$cluster_type_map=="Pasta"){
+        cluster_df <- data.table(mkz=rmse_df_map()$mkz,cluster=as.factor(temp_kmean$cluster)) %>%
+          left_join(as.data.frame(temp_kmean$centers) %>%
+                      rowid_to_column("cluster") %>%
+                      rename(rmse=V1) %>%
+                      mutate_at(vars(cluster),as.factor),by="cluster")
       } else {
         cluster_df <- data.table(di_corr_map()$mkz,cluster=as.factor(temp_kmean$cluster)) %>%
             left_join(as.data.frame(temp_kmean$centers) %>%
@@ -957,6 +982,12 @@ server <- function(input, output, session){
             left_join(cluster_df,by="mkz") %>%
             filter(!is.na(cluster)) %>%
             dplyr::select(mkz,messstellenname,cluster,slope)
+        } else if (input$cluster_type_map=="Pasta"){
+          selected_shp$data <- sf_sachsen() %>%
+            filter(mkz %in% sf_selected()) %>%
+            left_join(cluster_df,by="mkz") %>%
+            filter(!is.na(cluster)) %>%
+            dplyr::select(mkz,messstellenname,cluster,rmse)
         } else {
           selected_shp$data <- sf_sachsen() %>%
             filter(mkz %in% sf_selected()) %>%
@@ -979,6 +1010,12 @@ server <- function(input, output, session){
             left_join(cluster_df,by="mkz") %>%
             filter(!is.na(cluster)) %>%
             dplyr::select(mkz,messstellenname,cluster,slope)
+        } else if (input$cluster_type_map=="Pasta"){
+          selected_shp$data <- sf_sachsen_anhalt() %>%
+            filter(mkz %in% sf_selected()) %>%
+            left_join(cluster_df,by="mkz") %>%
+            filter(!is.na(cluster)) %>%
+            dplyr::select(mkz,messstellenname,cluster,rmse)
         } else {
           selected_shp$data <- sf_sachsen_anhalt() %>%
             filter(mkz %in% sf_selected()) %>%
@@ -1000,6 +1037,12 @@ server <- function(input, output, session){
             left_join(cluster_df,by="mkz") %>%
             filter(!is.na(cluster)) %>%
             dplyr::select(mkz,messstellenname,cluster,slope)
+        } else if (input$cluster_type_map=="Pasta"){
+          selected_shp$data <- sf_all() %>%
+            filter(mkz %in% sf_selected()) %>%
+            left_join(cluster_df,by="mkz") %>%
+            filter(!is.na(cluster)) %>%
+            dplyr::select(mkz,messstellenname,cluster,rmse)
         } else {
           selected_shp$data <- sf_all() %>%
             filter(mkz %in% sf_selected()) %>%
@@ -1084,8 +1127,15 @@ server <- function(input, output, session){
         
       }
     } else if (input$cluster_type_map=="Trend"){
+      
       cluster_df <- data.table(mkz=sign_meta()$mkz,cluster=clust_obj_map()$cluster) %>%
         mutate_at(vars(cluster),as.factor)
+      
+    } else if (input$cluster_type_map=="Pasta") {
+      
+      cluster_df <- data.table(mkz=rmse_df_map()$mkz,cluster=clust_obj_map()$cluster) %>%
+        mutate_at(vars(cluster),as.factor)
+      
     } else {
       cluster_df <- data.table(mkz=di_corr_map()$mkz,cluster=clust_obj_map()$cluster) %>%
         mutate_at(vars(cluster),as.factor)
@@ -1135,7 +1185,16 @@ server <- function(input, output, session){
                       add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
                       rename(slope=V1) %>%
                       mutate_at(vars(slope),function(x) round(x,2)),by="cluster")
-      } else {
+      } else if (input$cluster_type_map=="Pasta"){
+        pts_cluster <- sf_sachsen() %>%
+          left_join(cluster_df(),by="mkz") %>%
+          mutate_at(vars(cluster),as.factor) %>%
+          left_join(kmean_obj$centers %>%
+                      as.data.frame() %>%
+                      add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
+                      rename(rmse=V1) %>%
+                      mutate_at(vars(rmse),function(x) round(x,2)),by="cluster")
+      }  else {
         pts_cluster <- sf_sachsen() %>%
           left_join(cluster_df(),by="mkz") %>%
           mutate_at(vars(cluster),as.factor) %>%
@@ -1176,6 +1235,15 @@ server <- function(input, output, session){
                       add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
                       rename(slope=V1) %>%
                       mutate_at(vars(slope),function(x) round(x,2)),by="cluster")
+      } else if (input$cluster_type_map=="Pasta") {
+        pts_cluster <- sf_sachsen_anhalt() %>%
+          left_join(cluster_df(),by="mkz") %>%
+          mutate_at(vars(cluster),as.factor) %>%
+          left_join(kmean_obj$centers %>%
+                      as.data.frame() %>%
+                      add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
+                      rename(rmse=V1) %>%
+                      mutate_at(vars(rmse),function(x) round(x,2)),by="cluster")
       } else {
         pts_cluster <- sf_sachsen_anhalt() %>%
           left_join(cluster_df(),by="mkz") %>%
@@ -1217,6 +1285,15 @@ server <- function(input, output, session){
                       add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
                       rename(slope=V1) %>%
                       mutate_at(vars(slope),function(x) round(x,2)),by="cluster")
+      } else if (input$cluster_type_map=="Pasta"){
+        pts_cluster <- sf_all() %>%
+          left_join(cluster_df(),by="mkz") %>%
+          mutate_at(vars(cluster),as.factor) %>%
+          left_join(kmean_obj$centers %>%
+                      as.data.frame() %>%
+                      add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
+                      rename(rmse=V1) %>%
+                      mutate_at(vars(rmse),function(x) round(x,2)),by="cluster")
       } else {
         pts_cluster <- sf_all() %>%
           left_join(cluster_df(),by="mkz") %>%
@@ -1301,6 +1378,8 @@ server <- function(input, output, session){
       }
     } else if (input$cluster_type_meta=="Trend"){
       obj <- kmeans(abs(sign_meta()$slope),input$k,nstart=25)
+    } else if (input$cluster_type_meta=="Pasta"){
+      obj <- kmeans(rmse_df_meta()$rmse,input$k,nstart=25)
     } else {
       obj <- kmeans(di_corr_meta()$similar,input$k,nstart=25) 
     }
@@ -1322,6 +1401,8 @@ server <- function(input, output, session){
       }
     } else if (input$cluster_type_meta=="Trend"){
       obj <- data.table(mkz=sign_meta()$mkz,cluster=as.factor(clust_obj_meta()$cluster))
+    } else if (input$cluster_type_meta=="Pasta"){
+      obj <- kmeans(rmse_df_meta()$rmse,input$k_map,nstart=25)
     } else {
       obj <- data.table(mkz=di_corr_meta()$mkz,cluster=as.factor(clust_obj_meta()$cluster))
     }
@@ -1340,6 +1421,8 @@ server <- function(input, output, session){
       }
     } else if (input$cluster_type_map=="Trend"){
       obj <- kmeans(abs(sign_meta()$slope),input$k_map,nstart=25)
+    } else if (input$cluster_type_map=="Pasta"){
+      obj <- kmeans(rmse_df_map()$rmse,input$k_map,nstart=25)
     } else {
       obj <- kmeans(di_corr_map()$similar,input$k_map,nstart=25)
     }
@@ -1567,13 +1650,16 @@ server <- function(input, output, session){
   classes <- reactive({
     if (input$marker_loc=="Sachsen"){
       sf_sachsen() %>%
-        left_join(cluster_class,by="mkz")
+        left_join(cluster_class,by="mkz") %>%
+        mutate(class=factor(class,levels=c("No Influence","Weak Influence","Moderate Influence","Strong Influence")))
     } else if (input$marker_loc=="Sachsen-Anhalt"){
       sf_sachsen_anhalt() %>%
-        left_join(cluster_class,by="mkz")
+        left_join(cluster_class,by="mkz") %>%
+        mutate(class=factor(class,levels=c("No Influence","Weak Influence","Moderate Influence","Strong Influence")))
     } else {
       sf_all() %>%
-        left_join(cluster_class,by="mkz")
+        left_join(cluster_class,by="mkz") %>%
+        mutate(class=factor(class,levels=c("No Influence","Weak Influence","Moderate Influence","Strong Influence")))
     }
   })
   
@@ -1681,6 +1767,11 @@ server <- function(input, output, session){
             "<strong>Kennzeichnungsnummer:</strong>",cluster_text_map()$mkz,"<br>",
             "<strong>Cluster:</strong>",cluster_text_map()$cluster,"<br>",
             "<strong>Sen-Slope:</strong>",cluster_text_map()$slope,"m/Jahr")
+    } else if (input$cluster_type_map=="Pasta"){
+      paste("<strong>Messtellenname:</strong>",cluster_text_map()$messstellenname,"<br>",
+            "<strong>Kennzeichnungsnummer:</strong>",cluster_text_map()$mkz,"<br>",
+            "<strong>Cluster:</strong>",cluster_text_map()$cluster,"<br>",
+            "<strong>RMSE:</strong>",cluster_text_map()$rmse,"m/Jahr")
     } else {
       paste("<strong>Messtellenname:</strong>",cluster_text_map()$messstellenname,"<br>",
             "<strong>Kennzeichnungsnummer:</strong>",cluster_text_map()$mkz,"<br>",
@@ -2169,7 +2260,6 @@ server <- function(input, output, session){
           addLegend("bottomright",pal=pal_fun,values=~similar,opacity = 1,title = "Korrelation")
       }
     } else if (input$show_classes & !input$show_descr_values & !input$show_period & !input$show_th & !input$show_alt & !input$show_cluster & !input$show_trend & !input$show_di){
-        print(T)
         classes() %>%
           leaflet() %>%
           addTiles() %>%
@@ -2181,7 +2271,7 @@ server <- function(input, output, session){
             layerId = classes()$mkz,
             popup = default_popup_all()
           ) %>%
-          addLegend("bottomright",pal=pal_alt,values=~class,opacity = 1,title = "Klassen")
+          addLegend("bottomright",pal=pal_alt,values=~class,opacity = 1,title = "Externer Einfluss")
     } else {
       if (input$marker_loc=="Sachsen"){
         temp_leaflet %>%
@@ -2492,6 +2582,47 @@ server <- function(input, output, session){
           theme(axis.text.y = element_blank(),
                 axis.ticks.y = element_blank())
       }
+    } else if (input$cluster_type_meta=="Pasta"){
+      tb <- tibble(mkz=rmse_df_meta()$mkz,slope=rmse_df_meta()$rmse,cluster=as.factor(kmean_obj$cluster)) %>%
+        left_join(tibble(center=kmean_obj$centers[,1]) %>%
+                    rowid_to_column("cluster") %>%
+                    mutate_at(vars(cluster),as.factor),by="cluster")
+      
+      max_val <- tb %>%
+        summarize(max_val=max(rmse)) %>%
+        pull(max_val)
+      
+      if (input$k_log){
+        
+        tb %>%
+          ggplot(aes(rmse,1,col=cluster))+
+          geom_point()+
+          geom_pointrange(aes(ymin=0,ymax=1))+
+          geom_text(aes(x=max_val-ifelse(input$k_log,0.8,0.2)*max_val,y=1.5+(1/8*as.numeric(cluster)),
+                        label=paste("Cluster",as.character(cluster),as.character(round(center,2)))),check_overlap=F)+
+          scale_y_continuous(limits = c(0,1+8/4))+
+          scale_color_viridis_d("Cluster")+
+          labs(x="Sen Slope [m/Jahr]",y="")+
+          scale_x_log10()+
+          theme_bw()+
+          theme(axis.text.y = element_blank(),
+                axis.ticks.y = element_blank())
+        
+      } else {
+        
+        tb %>%
+          ggplot(aes(rmse,1,col=cluster))+
+          geom_point()+
+          geom_pointrange(aes(ymin=0,ymax=1))+
+          geom_text(aes(x=max_val-ifelse(input$k_log,0.8,0.2)*max_val,y=1.5+(1/8*as.numeric(cluster)),
+                        label=paste("Cluster",as.character(cluster),as.character(round(center,2)))),check_overlap=F)+
+          scale_y_continuous(limits = c(0,1+8/4))+
+          scale_color_viridis_d("Cluster")+
+          labs(x="Sen Slope [m/Jahr]",y="")+
+          theme_bw()+
+          theme(axis.text.y = element_blank(),
+                axis.ticks.y = element_blank())
+      }
     } else {
       tb <- tibble(mkz=di_corr_meta()$mkz,similar=di_corr_meta()$similar,cluster=as.factor(kmean_obj$cluster)) %>%
         left_join(tibble(center=kmean_obj$centers[,1]) %>%
@@ -2563,6 +2694,10 @@ server <- function(input, output, session){
       clust_list <- vector("list",19)
       for (i in 1:19){
         clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(sign_meta()$slope,i+1,nstart=25)$withinss))
+      }
+    } else if (input$cluster_type_meta=="Pasta"){
+      for (i in 1:19){
+        clust_list[[i]] <- data.frame(clust=i+1,ss=sum(kmeans(rmse_df_meta()$rmse,i+1,nstart=25)$withinss))
       }
     } else {
       clust_list <- vector("list",19)
@@ -2641,6 +2776,17 @@ server <- function(input, output, session){
         final_df <- tibble(mkz=sign_meta()$mkz,cluster=kmean_obj$cluster) %>%
           left_join(rbind(distances_s,distances_sa),by="mkz")
       }
+    } else if (input$cluster_type_meta=="Pasta"){
+      if (input$marker_loc_meta4=="Sachsen"){
+        final_df <- tibble(mkz=rmse_df_meta()$mkz,cluster=kmean_obj$cluster) %>%
+          left_join(distances_s,by="mkz")
+      } else if (input$marker_loc_meta4=="Sachsen-Anhalt"){
+        final_df <- tibble(mkz=rmse_df_meta()$mkz,cluster=kmean_obj$cluster) %>%
+          left_join(distances_sa,by="mkz")
+      } else {
+        final_df <- tibble(mkz=rmse_df_meta()$mkz,cluster=kmean_obj$cluster) %>%
+          left_join(rbind(distances_s,distances_sa),by="mkz")
+      }
     } else {
       if (input$marker_loc_meta4=="Sachsen"){
         final_df <- tibble(mkz=di_corr_meta()$mkz,cluster=kmean_obj$cluster) %>%
@@ -2664,7 +2810,7 @@ server <- function(input, output, session){
                     as.data.frame() %>%
                     add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
                     mutate_at(vars(min_var,max_var),function(x) round(x,2)),by="cluster")
-    } else if (input$cluster_type_meta=="Trend"){
+    } else if (input$cluster_type_meta!="Trend"){
       final_df_medians <- final_df %>%
         mutate_at(vars(cluster),as.factor) %>%
         group_by(cluster) %>%
@@ -2673,6 +2819,15 @@ server <- function(input, output, session){
                     as.data.frame() %>%
                     add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
                     mutate(slope=round(V1,2)),by="cluster")
+    } else if (input$cluster_type_meta=="Pasta"){
+      final_df_medians <- final_df %>%
+        mutate_at(vars(cluster),as.factor) %>%
+        group_by(cluster) %>%
+        summarize(median=round(median(min_dist),0),n=n()) %>%
+        left_join(kmean_obj$centers %>%
+                    as.data.frame() %>%
+                    add_column(cluster=as.factor(seq(1,nrow(kmean_obj$centers)))) %>%
+                    mutate(rmse=round(V1,2)),by="cluster")
     } else {
       final_df_medians <- final_df %>%
         mutate_at(vars(cluster),as.factor) %>%
@@ -2716,6 +2871,12 @@ server <- function(input, output, session){
     } else if (input$cluster_type_meta=="Trend"){
       temp_plot <- temp_plot+
         geom_text(aes(x=cluster,y=median,label=paste("Sen-Slope:",slope,"m/Jahr",
+                                                     "\n","Median:",median,"m",
+                                                     "\n","Sample size:",n)),
+                  size=3,vjust=-3)
+    } else if (input$cluster_type_meta=="Pasta"){
+      temp_plot <- temp_plot+
+        geom_text(aes(x=cluster,y=median,label=paste("RMSE:",rmse,"m/Jahr",
                                                      "\n","Median:",median,"m",
                                                      "\n","Sample size:",n)),
                   size=3,vjust=-3)
