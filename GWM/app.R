@@ -1754,6 +1754,12 @@ server <- function(input, output, session){
           "<strong>Mittlere Sen-Slope:</strong>",round(mean(sf_sign()$slope,na.rm=T),2),"m/Jahr")
   })
   
+  classes_popup <- reactive({
+    paste("<strong>Messtellenname:</strong>",classes()$messstellenname,"<br>",
+          "<strong>Kennzeichnungsnummer:</strong>",classes()$mkz,"<br>",
+          "<strong>Klasse:</strong>",classes()$class)
+  })
+  
   
   cluster_popup <- reactive({
     if (input$cluster_type_map=="Variation"){
@@ -2275,9 +2281,17 @@ server <- function(input, output, session){
             opacity = 1,
             color = ~pal_alt(class),
             layerId = classes()$mkz,
-            popup = default_popup_all()
+            popup = classes_popup()
           ) %>%
-          addLegend("bottomright",pal=pal_alt,values=~class,opacity = 1,title = "Externer Einfluss")
+        addDrawToolbar(
+          targetGroup='draw',
+          polylineOptions=FALSE,
+          markerOptions = FALSE,
+          circleOptions = F,
+          polygonOptions = F,
+          circleMarkerOptions = F) %>%
+        hideGroup("draw") %>%
+        addLegend("bottomright",pal=pal_alt,values=~class,opacity = 1,title = "Externer Einfluss")
     } else {
       if (input$marker_loc=="Sachsen"){
         temp_leaflet %>%
@@ -2471,7 +2485,7 @@ server <- function(input, output, session){
         unique(df_all(),by="mkz")[,.(loc,mkz)][.,on="mkz"] %>%
         ggplot(aes(period,fill=loc))+
         geom_histogram(bins=input$bins_meta2,col="black")+
-        labs(title="Laenge der Messreihen in Sachsen und Sachsen-Anhalt",x="Tage",y="Anzahl an Messpunkten")+
+        labs(title="Laenge der Messreihen in Sachsen und Sachsen-Anhalt",x="Jahre",y="Anzahl an Messpunkten")+
         scale_y_continuous(labels = comma)+
         scale_fill_viridis_d("Bundesland")
         #scale_fill_manual("Bundesland",values = c(col_sachsen,col_sachsen_anhalt))
