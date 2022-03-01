@@ -7,6 +7,7 @@ library(tidyverse)
 library(scales)
 library(dygraphs)
 library(xts)
+library(factoextra)
 
 addLegend <- leaflet::addLegend
 
