@@ -2250,7 +2250,7 @@ server<-function(input, output, session) {
             summarize(all=sum(amount)) %>%
             filter(country==input$countries) %>%
             filter(year>=input$year) %>%
-            rename(tonnes=total_amount)
+            rename(tonnes=all)
         } else if (input$type=="Cas"){
           plot3_data() %>%
             group_by(country,year,cas_no) %>%
@@ -2258,7 +2258,7 @@ server<-function(input, output, session) {
             filter(country==input$countries) %>%
             filter(year>=input$year) %>%
             filter(cas_no==input$cas) %>%
-            rename(tonnes=total_amount)
+            rename(tonnes=all)
         },file)
     }
   )
